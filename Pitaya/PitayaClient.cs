@@ -18,7 +18,7 @@ namespace Pitaya
         private const int DEFAULT_CONNECTION_TIMEOUT = 30;
 
         private TcpClient _client = null;
-        private NetworkStream _stream = null;
+        private static NetworkStream _stream = null;
         private object _clientHandshake = null;
         private bool DataCompression = false;
         private EventManager _eventManager;
@@ -96,218 +96,15 @@ namespace Pitaya
             _client.Close();
         }
 
-
-        private void WriteBytes(byte[] bytes) {
-            foreach (byte b in bytes) {
-                Console.Write(b);
-                Console.Write(" ");
-            }
-            Console.WriteLine("");
-        }
-
         private byte[] BuildPacket(Request data) {
-            byte[] encMsg = EncodeMsg(data);
+            byte[] encMsg = EncoderDecoder.EncodeMsg(data);
 
-            return EncodePacket(PitayaGoToCSConstants.Data, encMsg);
+            return EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Data, encMsg);
         }
 
-        private byte[] IntToBytes(int n) {
-            byte[] buf = new byte[3];
-            buf[0] = (byte)((n >> 16) & 0xFF);
-            buf[1] = (byte)((n >> 8) & 0xFF);
-            buf[2] = (byte)(n & 0xFF);
-            return buf;
-        }
-
-        private int BytesToInt(byte[] b) {
-            int result = 0;
-            foreach (byte v in b) {
-                result = result<<8 + (int)v;
-            }
-            return result;
-        }
-
-        private (int, uint) ParseHeader(byte[] header) {
-            if (header.Length != PitayaGoToCSConstants.HeadLength) {
-                return (0, 0x00);
-            }
-            byte typ = header[0];
-            if (typ < PitayaGoToCSConstants.Handshake || typ > PitayaGoToCSConstants.Kick) {
-                return (0, 0x00);
-            }
-
-            byte[] bytes = new byte[header.Length-1];
-            Array.Copy(header, 1, bytes, 0, header.Length-1);
-            int size = BytesToInt(bytes);
-
-            if (size > PitayaGoToCSConstants.MaxPacketSize) {
-                return (0, 0x00);
-            }
-
-            return (size, typ);
-        }
-
-
-        private (int, uint) Forward(MemoryStream buf) {
-            byte[] header = new byte[PitayaGoToCSConstants.HeadLength];
-            int bytesRead = buf.Read(header, 0, PitayaGoToCSConstants.HeadLength);
-            return ParseHeader(header);
-        }
-
-        private Packet[] DecodePacket(byte[] data) {
-            MemoryStream buf = new MemoryStream(data);
-
-            List<Packet> packets = new List<Packet>();
-            // check length
-            if (buf.Length < PitayaGoToCSConstants.HeadLength) {
-                return null;
-            }
-
-            // first time
-            var (size, typ) = Forward(buf);
-
-            while (size <= buf.Length) {
-                byte[] packetData = new byte[size];
-                buf.Read(packetData, 0, size);
-
-                Packet p = new Packet{Type=typ, Length=size, Data=packetData};
-                packets.Add(p);
-
-                // if no more packets, break
-                if (buf.Length < PitayaGoToCSConstants.HeadLength) {
-                    break;
-                }
-
-                (size, typ) = Forward(buf);
-            }
-
-            return packets.ToArray();
-        }
-
-
-        private byte[] EncodePacket(uint typ, byte[] data) {
-            if (typ < PitayaGoToCSConstants.Handshake || typ > PitayaGoToCSConstants.Kick) {
-                return null;
-                // return nil, packet.ErrWrongPomeloPacketType
-            }
-
-            if (data.Length > PitayaGoToCSConstants.MaxPacketSize) {
-                return null;
-                // return nil, ErrPacketSizeExcced
-            }
-
-            Packet p = new Packet(){Type=typ, Length=data.Length};
-            byte[] buf = new byte[p.Length+PitayaGoToCSConstants.HeadLength];
-            buf[0] = (byte)(p.Type);
-
-            byte[] source = IntToBytes(p.Length);
-
-            Array.Copy(source, 0, buf, 1, PitayaGoToCSConstants.HeadLength - 1);
-
-            Array.Copy(data, 0, buf, PitayaGoToCSConstants.HeadLength, data.Length);
-
-            
-            // Array.Copy(IntToBytes(p.Length), 0, buf, 1, PitayaGoToCSConstants.HeadLength);
-	        // Array.Copy(data, 0, buf, PitayaGoToCSConstants.HeadLength, data.Length);
-            
-            // copy(buf[1:HeadLength], IntToBytes(p.Length))
-            // copy(buf[HeadLength:], data)
-
-            return buf;
-        }
-
-        private byte[] EncodeMsg(Request message) {
-            // if InvalidType(message.Type) {
-            //     return nil, ErrWrongMessageType
-            // }
-
-            List<byte> buf = new List<byte>();
-            byte flag = (byte)(message.Type << 1);
-
-            // routesCodesMutex.RLock()
-            // code, compressed := routes[message.Route]
-            // routesCodesMutex.RUnlock()
-            // if compressed {
-            //     flag |= msgRouteCompressMask
-            // }
-
-            // if message.Err {
-            //     flag |= errorMask
-            // }
-
-            buf.Add(flag);
-
-            if (message.Type == PitayaGoToCSConstants.Request) {
-                ulong n = message.Id;
-                byte b;
-                // variant length encode
-                while (true) {
-                    b = (byte)(n % 128);
-                    n >>= 7;
-                    if (n != 0) {
-                        buf.Add((byte)(b+128));
-                    } else {
-                        buf.Add(b);
-                        break;
-                    }
-                }
-            }
-
-            if (message.Type == PitayaGoToCSConstants.Request || message.Type == PitayaGoToCSConstants.Notify || message.Type == PitayaGoToCSConstants.Push) {
-                buf.Add((byte)message.Route.Length);
-                buf.AddRange(System.Text.Encoding.UTF8.GetBytes(message.Route));
-            }
-
-            if (DataCompression) {
-                //TODO 
-
-                // d, err := compression.De flateData(message.Data)
-                // if err != nil {
-                //     return nil, err
-                // }
-
-                // if len(d) < len(message.Data) {
-                //     message.Data = d
-                //     buf[0] |= gzipMask
-                // }
-            }
-
-            buf.AddRange(message.Data);
-            return buf.ToArray();
-        }
-
-        private byte[] SerializeObject(object obj)
-        {
-            if (obj == null)
-                return null;
-
-            return Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(obj));
-        }
-        
         private void HandleHandshake() {
             SendHandshakeRequest();
             HandleHandshakeResponse();
-        }
-
-        private Packet[] ReadPackets(MemoryStream buf) {
-            // listen for sv messages
-            byte[] data = new byte[1024];
-            int n = data.Length;
-
-            while (n == data.Length) {
-                n = _stream.Read(data);
-                buf.Write(data, 0, n);
-            }
-            Packet[] packets = DecodePacket(buf.ToArray());
-
-            int totalProcessed = 0;
-            foreach (Packet p in packets) {
-                totalProcessed += PitayaGoToCSConstants.HeadLength + p.Length;
-            }
-            // buf.Next(totalProcessed)
-            buf.Seek(totalProcessed, SeekOrigin.Begin);
-
-            return packets;
         }
 
         private void HandleHandshakeResponse() {
@@ -334,7 +131,7 @@ namespace Pitaya
             // if handshake.Sys.Dict != nil {
             //     message.SetDictionary(handshake.Sys.Dict)
             // }
-            byte[] p = EncodePacket(PitayaGoToCSConstants.HandshakeAck, new byte[]{});
+            byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.HandshakeAck, new byte[]{});
             _stream.Write(p);
 
             // c.Connected = true
@@ -349,7 +146,7 @@ namespace Pitaya
         private void SendHandshakeRequest() {
             string enc = Newtonsoft.Json.JsonConvert.SerializeObject(_clientHandshake);
             byte[] encBytes = Encoding.UTF8.GetBytes(enc);
-            byte[] p = EncodePacket(PitayaGoToCSConstants.Handshake, encBytes);
+            byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Handshake, encBytes);
 
             _stream.Write(p, 0, p.Length);
         }
@@ -373,8 +170,29 @@ namespace Pitaya
 
             byte[] byteRequest = BuildPacket(request);
             
-            WriteBytes(byteRequest);
+            Utils.WriteBytes(byteRequest);
             _stream.Write(byteRequest, 0, byteRequest.Length);
+        }
+
+        private static Packet[] ReadPackets(MemoryStream buf) {
+            // listen for sv messages
+            byte[] data = new byte[1024];
+            int n = data.Length;
+
+            while (n == data.Length) {
+                n = _stream.Read(data);
+                buf.Write(data, 0, n);
+            }
+            Packet[] packets = EncoderDecoder.DecodePacket(buf.ToArray());
+
+            int totalProcessed = 0;
+            foreach (Packet p in packets) {
+                totalProcessed += PitayaGoToCSConstants.HeadLength + p.Length;
+            }
+            // buf.Next(totalProcessed)
+            buf.Seek(totalProcessed, SeekOrigin.Begin);
+
+            return packets;
         }
 
         // public void Connect(string host, int port, Dictionary<string, string> handshakeOpts)

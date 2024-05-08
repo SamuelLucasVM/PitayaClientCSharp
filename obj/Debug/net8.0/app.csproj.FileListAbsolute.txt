@@ -16,3 +16,4 @@
 /Users/samuellucas/Documents/work/load-test/app/bin/Debug/net8.0/Google.Protobuf.dll
 /Users/samuellucas/Documents/work/load-test/app/bin/Debug/net8.0/Newtonsoft.Json.dll
 /Users/samuellucas/Documents/work/load-test/app/obj/Debug/net8.0/app.csproj.CopyComplete
+/Users/samuellucas/Documents/work/load-test/app/obj/Debug/net8.0/app.sourcelink.json
