@@ -1,0 +1,29 @@
+﻿<Properties StartupConfiguration="{AB37F8ED-771B-4D5A-9E23-7755D022C9AF}|Default">
+  <MonoDevelop.Ide.Workbench ActiveDocument="Pitaya/PitayaClient.cs">
+    <Files>
+      <File FileName="Pitaya/CtoC#/PitayaStructsImpl.cs" Line="15" Column="1" />
+      <File FileName="Pitaya/PitayaClient.cs" Line="154" Column="14" />
+    </Files>
+    <Pads>
+      <Pad Id="ProjectPad">
+        <State name="__root__">
+          <Node name="app" expanded="True">
+            <Node name="app" expanded="True">
+              <Node name="Pitaya" expanded="True">
+                <Node name="CtoC#" expanded="True" />
+                <Node name="PitayaClient.cs" selected="True" />
+              </Node>
+            </Node>
+          </Node>
+        </State>
+      </Pad>
+    </Pads>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.ItemProperties.app PreferredExecutionTarget="MonoDevelop.Default" />
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MultiItemStartupConfigurations />
+</Properties>

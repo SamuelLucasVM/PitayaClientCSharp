@@ -1,0 +1,13 @@
+syntax = "proto3";
+package protos;
+option go_package = "./protos_go";
+
+message Account {
+  string id = 1;
+
+  string name = 2;
+
+  string age = 3;
+
+  int32 views = 4;
+}

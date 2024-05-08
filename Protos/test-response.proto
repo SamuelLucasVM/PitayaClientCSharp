@@ -1,0 +1,19 @@
+syntax = "proto3";
+package protos;
+option go_package = "./protos_go";
+
+import "account.proto";
+
+message CreatedAccount {
+  string id = 1;
+
+  string status = 2;
+}
+
+message ViewsIncreased {
+  string status = 1;
+}
+
+message Accounts {
+  repeated Account accounts = 1;
+}
