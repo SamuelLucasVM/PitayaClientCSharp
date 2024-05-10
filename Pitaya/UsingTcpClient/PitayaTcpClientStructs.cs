@@ -1,4 +1,21 @@
 namespace Pitaya.NativeImpl {
+
+    // HandshakeClientData represents information about the client sent on the handshake.
+    public class HandshakeClientData {
+        public string Platform;
+        public string LibVersion;
+        public string BuildNumber;
+        public string Version;
+    }
+
+    // HandshakeData represents information about the handshake sent by the client.
+    // `sys` corresponds to information independent from the app and `user` information
+    // that depends on the app and is customized by the user.
+    public class SessionHandshakeData {
+        public HandshakeClientData Sys;
+        public Dictionary<string, object> User;
+    }
+
     public class HandshakeSys {
         public Dictionary<string, ushort> Dict;
         public int Heartbeat;

@@ -7,6 +7,8 @@ using Newtonsoft.Json;
 using System.Text;
 using Pitaya.NativeImpl;
 
+using System.Threading;
+
 namespace Pitaya
 {
     public class PitayaClient : IPitayaClient, IPitayaListener //IDisposable
@@ -19,8 +21,9 @@ namespace Pitaya
 
         private TcpClient _client = null;
         private static NetworkStream _stream = null;
-        private object _clientHandshake = null;
+        private SessionHandshakeData _clientHandshake = null;
         private bool DataCompression = false;
+        private bool Connected = false;
         private EventManager _eventManager;
         private bool _disposed;
         private uint _reqUid;
@@ -34,17 +37,16 @@ namespace Pitaya
         {
             _client = new TcpClient();
 
-            _clientHandshake = new {
-			    sys = new {
-                    platform = "mac",
-                    libVersion = "0.3.5-release",
-                    buildNumber = "20",
-                    version = "2.1",
+            _clientHandshake = new SessionHandshakeData {
+			    Sys = new HandshakeClientData {
+                    Platform = "mac",
+                    LibVersion = "0.3.5-release",
+                    BuildNumber = "20",
+                    Version = "2.1",
 			    },
-                user = new {
-                    age = "30",
-                },
+                User = new Dictionary<string, object>(),
 		    };
+            _clientHandshake.User["age"] = 30;
         }
 
         ~PitayaClient()
@@ -92,10 +94,6 @@ namespace Pitaya
         //     get { return _binding.State(_client); }
         // }
 
-        public void Close() {
-            _client.Close();
-        }
-
         private byte[] BuildPacket(Request data) {
             byte[] encMsg = EncoderDecoder.EncodeMsg(data);
 
@@ -108,39 +106,67 @@ namespace Pitaya
         }
 
         private void HandleHandshakeResponse() {
-            // MemoryStream buf = new MemoryStream();
-            // Packet[] packets = ReadPackets(buf);
+            MemoryStream buf = new MemoryStream();
+            Packet[] packets = ReadPackets(ref buf);
 
-            // Packet handshakePacket = packets[0];
-            // if (handshakePacket.Type != PitayaGoToCSConstants.Handshake) {
-            //     return;
-            // }
+            Packet handshakePacket = packets[0];
+            HandshakeData handshake = new HandshakeData();
+            if (Compression.IsCompressed(handshakePacket.Data)) {
+                handshakePacket.Data = Compression.InflateData(handshakePacket.Data);
+            }
 
-            // HandshakeData handshake = new HandshakeData();
-            // if compression.IsCompressed(handshakePacket.Data) {
-            //     handshakePacket.Data, err = compression.InflateData(handshakePacket.Data)
-            //     if err != nil {
-            //         return err
-            //     }
-            // }
+            handshake = JsonConvert.DeserializeObject<HandshakeData>(Encoding.Default.GetString(handshakePacket.Data));
 
-            // err = json.Unmarshal(handshakePacket.Data, handshake)
-
-            // Console.WriteLine("got handshake from sv, data: " + handshake);
-
-            // if handshake.Sys.Dict != nil {
-            //     message.SetDictionary(handshake.Sys.Dict)
+            Console.WriteLine("got handshake from sv, data: " + handshake);
+            // if (handshake.Sys.Dict != null) {
+            //     message.SetDictionary(handshake.Sys.Dict);
             // }
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.HandshakeAck, new byte[]{});
             _stream.Write(p);
 
-            // c.Connected = true
+            Connected = true;   
 
-            // go c.sendHeartbeats(handshake.Sys.Heartbeat)
-            // go c.handleServerMessages()
-            // go c.handlePackets()
-            // go c.pendingRequestsReaper()
+            // var sendHeartbeatsTask = Task.Run(() => sendHeartbeats(handshake.Sys.Heartbeat));
+            // var handleServerMessagesTask = Task.Run(() => handleServerMessages());
+            // var handlePacketsTask = Task.Run(() => handlePackets());
+            // var pendingRequestsReaperTask = Task.Run(() => pendingRequestsReaper());
 
+            // await Task.WhenAll(sendHeartbeatsTask);
+        }
+
+        private async void handleServerMessages() {
+            MemoryStream buf = new MemoryStream();
+
+            try {
+                while (Connected) {
+                    Packet[] packets = ReadPackets(ref buf);
+
+                    foreach (Packet p in packets) {
+                        byte[] buffer = p.Data;
+
+                        int bytesRead = await _stream.ReadAsync(buffer, 0, p.Length);
+                        if (bytesRead == 0) // Connection closed by server
+                            break;
+
+                        string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        Console.WriteLine("Received message: " + message);
+                    }
+                }
+            }
+            finally {
+                // c.Disconnect();
+            }
+        }
+
+        private void sendHeartbeats(int interval) {
+            Timer t = new Timer(_ => {
+                Console.WriteLine("oi");
+                // case <-t.C:
+                    byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Heartbeat, new byte[]{});
+                    _stream.Write(p);
+                // case <-c.closeChan:
+                //     return;
+            }, null, 0, interval);
         }
 
         private void SendHandshakeRequest() {
@@ -174,7 +200,7 @@ namespace Pitaya
             _stream.Write(byteRequest, 0, byteRequest.Length);
         }
 
-        private static Packet[] ReadPackets(MemoryStream buf) {
+        private static Packet[] ReadPackets(ref MemoryStream buf) {
             // listen for sv messages
             byte[] data = new byte[1024];
             int n = data.Length;
@@ -183,14 +209,16 @@ namespace Pitaya
                 n = _stream.Read(data);
                 buf.Write(data, 0, n);
             }
-            Packet[] packets = EncoderDecoder.DecodePacket(buf.ToArray());
+            
+            Packet[] packets = null;
+            packets = EncoderDecoder.DecodePacket(buf.ToArray());
 
             int totalProcessed = 0;
             foreach (Packet p in packets) {
                 totalProcessed += PitayaGoToCSConstants.HeadLength + p.Length;
             }
             // buf.Next(totalProcessed)
-            buf.Seek(totalProcessed, SeekOrigin.Begin);
+            Utils.NextMemoryStream(ref buf, totalProcessed);
 
             return packets;
         }
@@ -345,6 +373,15 @@ namespace Pitaya
         public void OffRoute(string route)
         {
             _eventManager.RemoveOnRouteEvent(route);
+        }
+
+        // Disconnect disconnects the client
+        public void Disconnect() {
+            if (Connected) {
+                Connected = false;
+                // close(c.closeChan);
+                _client.Close();
+            }
         }
 
         // public void Disconnect()

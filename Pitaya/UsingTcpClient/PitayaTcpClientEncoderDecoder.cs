@@ -1,30 +1,12 @@
 namespace Pitaya.NativeImpl {
     public static class EncoderDecoder {
-        private static (int, uint) ParseHeader(byte[] header) {
-            if (header.Length != PitayaGoToCSConstants.HeadLength) {
-                return (0, 0x00);
-            }
-            byte typ = header[0];
-            if (typ < PitayaGoToCSConstants.Handshake || typ > PitayaGoToCSConstants.Kick) {
-                return (0, 0x00);
-            }
-
-            byte[] bytes = new byte[header.Length-1];
-            Array.Copy(header, 1, bytes, 0, header.Length-1);
-            int size = Utils.BytesToInt(bytes);
-
-            if (size > PitayaGoToCSConstants.MaxPacketSize) {
-                return (0, 0x00);
-            }
-
-            return (size, typ);
-        }
-
-
-        private static (int, uint) Forward(MemoryStream buf) {
+        private static (int, uint) Forward(ref MemoryStream buf) {
             byte[] header = new byte[PitayaGoToCSConstants.HeadLength];
-            int bytesRead = buf.Read(header, 0, PitayaGoToCSConstants.HeadLength);
-            return ParseHeader(header);
+            buf.Read(header, 0, PitayaGoToCSConstants.HeadLength);
+            
+            Utils.NextMemoryStream(ref buf, header.Length);
+            
+            return Utils.ParseHeader(header);
         }
 
         public static Packet[] DecodePacket(byte[] data) {
@@ -37,11 +19,13 @@ namespace Pitaya.NativeImpl {
             }
 
             // first time
-            var (size, typ) = Forward(buf);
+            (int size, uint typ) = Forward(ref buf);
 
             while (size <= buf.Length) {
                 byte[] packetData = new byte[size];
                 buf.Read(packetData, 0, size);
+                
+                Utils.NextMemoryStream(ref buf, size);
 
                 Packet p = new Packet{Type=typ, Length=size, Data=packetData};
                 packets.Add(p);
@@ -51,7 +35,10 @@ namespace Pitaya.NativeImpl {
                     break;
                 }
 
-                (size, typ) = Forward(buf);
+                (size, typ) = Forward(ref buf);
+                if (size == 0 && typ == 0x00) {
+                    return null;
+                }
             }
 
             return packets.ToArray();
