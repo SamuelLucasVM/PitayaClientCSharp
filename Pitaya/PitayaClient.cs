@@ -105,9 +105,8 @@ namespace Pitaya
             HandleHandshakeResponse();
         }
 
-        private void HandleHandshakeResponse() {
-            MemoryStream buf = new MemoryStream();
-            Packet[] packets = ReadPackets(ref buf);
+        private async Task HandleHandshakeResponse() {
+            Packet[] packets = await ReadPackets();
 
             Packet handshakePacket = packets[0];
             HandshakeData handshake = new HandshakeData();
@@ -122,59 +121,51 @@ namespace Pitaya
             //     message.SetDictionary(handshake.Sys.Dict);
             // }
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.HandshakeAck, new byte[]{});
-            _stream.Write(p);
+            await _stream.WriteAsync(p);
 
             Connected = true;   
 
-            // var sendHeartbeatsTask = Task.Run(() => sendHeartbeats(handshake.Sys.Heartbeat));
-            // var handleServerMessagesTask = Task.Run(() => handleServerMessages());
+            Thread sendHeartBeats = new Thread(() => SendHeartbeats((int)handshake.Sys.Heartbeat));
+            sendHeartBeats.Start();
+            Thread handleServerMessages = new Thread(() => HandleServerMessages());
+            handleServerMessages.Start();
             // var handlePacketsTask = Task.Run(() => handlePackets());
             // var pendingRequestsReaperTask = Task.Run(() => pendingRequestsReaper());
-
-            // await Task.WhenAll(sendHeartbeatsTask);
         }
 
-        private async void handleServerMessages() {
-            MemoryStream buf = new MemoryStream();
+        private async Task HandleServerMessages() {
+            while (Connected) {
+                Packet[] packets = await ReadPackets();
 
-            try {
-                while (Connected) {
-                    Packet[] packets = ReadPackets(ref buf);
+                foreach (Packet p in packets) {
+                    byte[] buffer = p.Data;
 
-                    foreach (Packet p in packets) {
-                        byte[] buffer = p.Data;
+                    int bytesRead = await _stream.ReadAsync(buffer, 0, p.Length);
+                    if (bytesRead == 0) // Connection closed by server
+                        break;
 
-                        int bytesRead = await _stream.ReadAsync(buffer, 0, p.Length);
-                        if (bytesRead == 0) // Connection closed by server
-                            break;
-
-                        string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        Console.WriteLine("Received message: " + message);
-                    }
+                    string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Console.WriteLine("Received message: " + message);
                 }
             }
-            finally {
-                // c.Disconnect();
+
+            Disconnect();
+        }
+
+        private async Task SendHeartbeats(int interval) {
+            while (true) {
+                byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Heartbeat, new byte[] { });
+                await _stream.WriteAsync(p);
+                await Task.Delay(interval);
             }
         }
 
-        private void sendHeartbeats(int interval) {
-            Timer t = new Timer(_ => {
-                Console.WriteLine("oi");
-                // case <-t.C:
-                    byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Heartbeat, new byte[]{});
-                    _stream.Write(p);
-                // case <-c.closeChan:
-                //     return;
-            }, null, 0, interval);
-        }
-
-        private void SendHandshakeRequest() {
+        private async Task SendHandshakeRequest() {
             string enc = Newtonsoft.Json.JsonConvert.SerializeObject(_clientHandshake);
             byte[] encBytes = Encoding.UTF8.GetBytes(enc);
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Handshake, encBytes);
 
-            _stream.Write(p, 0, p.Length);
+            await _stream.WriteAsync(p, 0, p.Length);
         }
 
         public void Connect(string host, int port)
@@ -185,7 +176,7 @@ namespace Pitaya
             HandleHandshake();
         }
 
-        public void SendRequest(string route, byte[] data) {
+        public async Task SendRequest(string route, byte[] data) {
             Request request = new Request(){
                 Type = PitayaGoToCSConstants.Request,
                 Id = 1,
@@ -196,17 +187,18 @@ namespace Pitaya
 
             byte[] byteRequest = BuildPacket(request);
             
-            Utils.WriteBytes(byteRequest);
-            _stream.Write(byteRequest, 0, byteRequest.Length);
+            await _stream.WriteAsync(byteRequest, 0, byteRequest.Length);
         }
 
-        private static Packet[] ReadPackets(ref MemoryStream buf) {
+        private static async Task<Packet[]> ReadPackets() {
             // listen for sv messages
+            MemoryStream buf = new MemoryStream();
+
             byte[] data = new byte[1024];
             int n = data.Length;
 
             while (n == data.Length) {
-                n = _stream.Read(data);
+                n = await _stream.ReadAsync(data);
                 buf.Write(data, 0, n);
             }
             
