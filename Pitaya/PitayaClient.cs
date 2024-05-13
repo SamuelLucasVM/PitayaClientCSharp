@@ -109,6 +109,11 @@ namespace Pitaya
             Packet[] packets = await ReadPackets();
 
             Packet handshakePacket = packets[0];
+            if (handshakePacket.Type != PitayaGoToCSConstants.Handshake) {
+                Console.WriteLine("got first packet from server that is not a handshake, aborting");
+                return;
+        	}
+
             HandshakeData handshake = new HandshakeData();
             if (Compression.IsCompressed(handshakePacket.Data)) {
                 handshakePacket.Data = Compression.InflateData(handshakePacket.Data);
@@ -134,29 +139,36 @@ namespace Pitaya
         }
 
         private async Task HandleServerMessages() {
-            while (Connected) {
-                Packet[] packets = await ReadPackets();
+            try {
+                while (Connected) {
+                    Packet[] packets = await ReadPackets();
 
-                foreach (Packet p in packets) {
-                    byte[] buffer = p.Data;
+                    foreach (Packet p in packets) {
+                        byte[] buffer = p.Data;
 
-                    int bytesRead = await _stream.ReadAsync(buffer, 0, p.Length);
-                    if (bytesRead == 0) // Connection closed by server
-                        break;
+                        int bytesRead = await _stream.ReadAsync(buffer, 0, p.Length);
+                        if (bytesRead == 0) // Connection closed by server
+                            break;
 
-                    string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    Console.WriteLine("Received message: " + message);
+                        string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        Console.WriteLine("Received message: " + message);
+                    }
                 }
+            } finally {
+                Disconnect();
             }
 
-            Disconnect();
         }
 
         private async Task SendHeartbeats(int interval) {
-            while (true) {
-                byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Heartbeat, new byte[] { });
-                await _stream.WriteAsync(p);
-                await Task.Delay(interval);
+            try {
+                while (true) {
+                    byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Heartbeat, new byte[] { });
+                    await _stream.WriteAsync(p);
+                    await Task.Delay(interval);
+                }
+            } finally {
+                Disconnect();
             }
         }
 
