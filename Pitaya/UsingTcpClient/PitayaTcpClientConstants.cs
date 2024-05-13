@@ -1,6 +1,7 @@
 namespace Pitaya.NativeImpl
 {
-    public static class PitayaGoToCSConstants {
+    public static class PitayaGoToCSConstants
+    {
         // Errors
         public const int HeadLength = 4;
         public const int MaxPacketSize = 1 << 24; //16MB
@@ -17,5 +18,14 @@ namespace Pitaya.NativeImpl
         public const byte Notify = 0x01;
         public const byte Response = 0x02;
         public const byte Push = 0x03;
+
+        // Masks
+
+        public const byte errorMask = 0x20
+        public const byte gzipMask = 0x10
+        public const byte msgRouteCompressMask = 0x01
+        public const byte msgTypeMask = 0x07
+        public const byte msgRouteLengthMask = 0xFF
+        public const byte msgHeadLength = 0x02
     }
 }
