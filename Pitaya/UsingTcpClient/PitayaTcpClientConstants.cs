@@ -21,11 +21,11 @@ namespace Pitaya.NativeImpl
 
         // Masks
 
-        public const byte errorMask = 0x20
-        public const byte gzipMask = 0x10
-        public const byte msgRouteCompressMask = 0x01
-        public const byte msgTypeMask = 0x07
-        public const byte msgRouteLengthMask = 0xFF
-        public const byte msgHeadLength = 0x02
+        public const byte errorMask = 0x20;
+        public const byte gzipMask = 0x10;
+        public const byte msgRouteCompressMask = 0x01;
+        public const byte msgTypeMask = 0x07;
+        public const byte msgRouteLengthMask = 0xFF;
+        public const byte msgHeadLength = 0x02;
     }
 }

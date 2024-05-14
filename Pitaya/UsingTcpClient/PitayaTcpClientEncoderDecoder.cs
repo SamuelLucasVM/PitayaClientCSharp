@@ -153,7 +153,7 @@ namespace Pitaya.NativeImpl
             buf.AddRange(message.Data);
             return buf.ToArray();
         }
-        public static byte[] DecodeMsg(byte[] data)
+        public static Request DecodeMsg(byte[] data)
         {
             /*if len(data) < msgHeadLength {
                 return nil, ErrInvalidMessage
@@ -162,9 +162,10 @@ namespace Pitaya.NativeImpl
             Request message = new Request();
             byte flag = data[0];
 
-            int offset = 1
+            int offset = 1;
 
-            message.Type = (flag >> 1) & PitayaGoToCSConstants.msgTypeMask;
+            // it's a cast to Type in golang
+            message.Type = (byte)((flag >> 1) & PitayaGoToCSConstants.msgTypeMask);
 
             //if invalidType(message.Type) {
             //    return nil, ErrWrongMessageType
@@ -179,7 +180,7 @@ namespace Pitaya.NativeImpl
                 for (int i = offset; i < data.Length; i++)
                 {
                     byte b = data[i];
-                    id += (ulong)(b & 0x7F) << (ulong)(7 * (i - offset));
+                    id += (ulong)(b & 0x7F) << (7 * (i - offset));
                     if (b < 128)
                     {
                         offset = i + 1;
@@ -196,7 +197,7 @@ namespace Pitaya.NativeImpl
             //routable
             if (message.Type == PitayaGoToCSConstants.Request || message.Type == PitayaGoToCSConstants.Notify || message.Type == PitayaGoToCSConstants.Push)
             {
-                if (flag & PitayaGoToCSConstants.msgRouteCompressMask == 1)
+                if ((flag & PitayaGoToCSConstants.msgRouteCompressMask) == 1)
                 {
                     //if offset > size || (offset+2) > size {
                     //   return nil, ErrInvalidMessage
@@ -204,11 +205,49 @@ namespace Pitaya.NativeImpl
 
                     // message.compressed = true
 
-                    // Is this big endian or little endian? Gotta check later
-                    ushort code = BitConverter.ToUInt16(data, offset);
+                    // The line below should be the same as: code := binary.BigEndian.Uint16(data[offset:(offset + 2)])
+                    ushort code = (ushort)((data[offset] << 8) | data[offset + 1]);
+
+                    //routesCodesMutex.RLock()
+                    //route, ok := codes[code]
+                    //routesCodesMutex.RUnlock()
+                    //if !ok {
+                    //    return nil, ErrRouteInfoNotFound
+                    //}
+                    //message.Route = route
+                    offset += 2;
+                }
+                else
+                {
+                    //m.compressed = false
+                    byte rl = data[offset];
+                    offset++;
+
+                    // if offset > size || (offset+int(rl)) > size {
+                    //    return nil, ErrInvalidMessage
+                    //}
+                    message.Route = System.Text.Encoding.UTF8.GetString(data, offset, offset + rl);
+                    offset += rl;
                 }
             }
 
+            //if offset > size {
+            //    return nil, ErrInvalidMessage
+            //}
+
+            byte[] decodedMessageData = new byte[data.Length - offset];
+            Array.Copy(data, offset, decodedMessageData, 0, decodedMessageData.Length);
+            message.Data = decodedMessageData;
+
+            if ((flag & PitayaGoToCSConstants.gzipMask) == PitayaGoToCSConstants.gzipMask)
+            {
+                //m.Data, err = compression.InflateData(m.Data)
+                //if err != nil {
+                //    return nil, err
+                //}
+            }
+
+            return message;
         }
     }
 
