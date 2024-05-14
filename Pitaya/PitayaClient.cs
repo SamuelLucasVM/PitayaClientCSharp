@@ -24,6 +24,8 @@ namespace Pitaya
         private static NetworkStream _stream = null;
         private SessionHandshakeData _clientHandshake = null;
         private Channel<Packet> _packetChann = null;
+        private Channel<bool> _pendingChann = null;
+        private Dictionary<uint, PendingRequest> _pendingRequests = null;
         private bool DataCompression = false;
         private bool Connected = false;
         private EventManager _eventManager;
@@ -51,6 +53,7 @@ namespace Pitaya
             _clientHandshake.User["age"] = 30;
 
             _packetChann = Channel.CreateUnbounded<Packet>();
+            _pendingChann = Channel.CreateBounded<bool>(30);
         }
 
         ~PitayaClient()
@@ -98,7 +101,7 @@ namespace Pitaya
         //     get { return _binding.State(_client); }
         // }
 
-        private byte[] BuildPacket(Request data) {
+        private byte[] BuildPacket(Message data) {
             byte[] encMsg = EncoderDecoder.EncodeMsg(data);
 
             return EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Data, encMsg);
@@ -135,11 +138,12 @@ namespace Pitaya
             Connected = true;   
 
             Thread sendHeartBeats = new Thread(() => SendHeartbeats((int)handshake.Sys.Heartbeat));
-            sendHeartBeats.Start();
             Thread handleServerMessages = new Thread(() => HandleServerMessages());
+            // var pendingRequestsReaperTask = Task.Run(() => pendingRequestsReaper());
+
+            sendHeartBeats.Start();
             handleServerMessages.Start();
             // var handlePacketsTask = Task.Run(() => handlePackets());
-            // var pendingRequestsReaperTask = Task.Run(() => pendingRequestsReaper());
         }
 
         private async Task HandleServerMessages() {
@@ -160,9 +164,10 @@ namespace Pitaya
         private async Task SendHeartbeats(int interval) {
             try {
                 while (true) {
+                    Console.WriteLine(interval);
                     byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Heartbeat, new byte[] { });
                     await _stream.WriteAsync(p);
-                    await Task.Delay(interval);
+                    await Task.Delay(interval * 1000);
                 }
             } finally {
                 Disconnect();
@@ -186,7 +191,7 @@ namespace Pitaya
         }
 
         public async Task SendRequest(string route, byte[] data) {
-            Request request = new Request(){
+            Message request = new Message(){
                 Type = PitayaGoToCSConstants.Request,
                 Id = 1,
                 Route = route,

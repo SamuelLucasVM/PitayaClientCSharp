@@ -87,8 +87,7 @@ namespace Pitaya.NativeImpl
             return buf;
         }
 
-        public static byte[] EncodeMsg(Request message)
-        {
+        public static byte[] EncodeMsg(Message message) {
             // if InvalidType(message.Type) {
             //     return nil, ErrWrongMessageType
             // }
@@ -153,13 +152,13 @@ namespace Pitaya.NativeImpl
             buf.AddRange(message.Data);
             return buf.ToArray();
         }
-        public static Request DecodeMsg(byte[] data)
+        public static Message DecodeMsg(byte[] data)
         {
             /*if len(data) < msgHeadLength {
                 return nil, ErrInvalidMessage
             }*/
 
-            Request message = new Request();
+            Message message = new Message();
             byte flag = data[0];
 
             int offset = 1;
@@ -173,14 +172,16 @@ namespace Pitaya.NativeImpl
 
             if (message.Type == PitayaGoToCSConstants.Request || message.Type == PitayaGoToCSConstants.Response)
             {
-                ulong id = 0;
+                // uint in Golang is either 32 or 64 bits
+                // uint here is just 32 bits
+                uint id = 0;
                 // little end byte order
                 // WARNING: must can be stored in 64 bits integer
                 // variant length encode
                 for (int i = offset; i < data.Length; i++)
                 {
                     byte b = data[i];
-                    id += (ulong)(b & 0x7F) << (7 * (i - offset));
+                    id += (uint)(b & 0x7F) << (7 * (i - offset));
                     if (b < 128)
                     {
                         offset = i + 1;
