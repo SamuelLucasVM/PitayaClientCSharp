@@ -8,6 +8,7 @@ using System.Text;
 using Pitaya.NativeImpl;
 
 using System.Threading;
+using System.Threading.Channels;
 
 namespace Pitaya
 {
@@ -22,6 +23,7 @@ namespace Pitaya
         private TcpClient _client = null;
         private static NetworkStream _stream = null;
         private SessionHandshakeData _clientHandshake = null;
+        private Channel<Packet> _packetChann = null;
         private bool DataCompression = false;
         private bool Connected = false;
         private EventManager _eventManager;
@@ -47,6 +49,8 @@ namespace Pitaya
                 User = new Dictionary<string, object>(),
 		    };
             _clientHandshake.User["age"] = 30;
+
+            _packetChann = Channel.CreateUnbounded<Packet>();
         }
 
         ~PitayaClient()
@@ -144,14 +148,7 @@ namespace Pitaya
                     Packet[] packets = await ReadPackets();
 
                     foreach (Packet p in packets) {
-                        byte[] buffer = p.Data;
-
-                        int bytesRead = await _stream.ReadAsync(buffer, 0, p.Length);
-                        if (bytesRead == 0) // Connection closed by server
-                            break;
-
-                        string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        Console.WriteLine("Received message: " + message);
+                        await _packetChann.Writer.WriteAsync(p);
                     }
                 }
             } finally {
