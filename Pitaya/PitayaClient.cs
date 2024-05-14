@@ -164,9 +164,10 @@ namespace Pitaya
         private async Task SendHeartbeats(int interval) {
             try {
                 while (true) {
+                    Console.WriteLine(interval);
                     byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Heartbeat, new byte[] { });
                     await _stream.WriteAsync(p);
-                    await Task.Delay(interval);
+                    await Task.Delay(interval * 1000);
                 }
             } finally {
                 Disconnect();
