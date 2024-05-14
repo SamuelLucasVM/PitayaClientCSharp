@@ -76,7 +76,7 @@ namespace Pitaya.NativeImpl {
             return buf;
         }
 
-        public static byte[] EncodeMsg(Request message) {
+        public static byte[] EncodeMsg(Message message) {
             // if InvalidType(message.Type) {
             //     return nil, ErrWrongMessageType
             // }

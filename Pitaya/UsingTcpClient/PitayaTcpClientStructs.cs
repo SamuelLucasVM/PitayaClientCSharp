@@ -33,12 +33,18 @@ namespace Pitaya.NativeImpl {
         public byte[] Data;
     }
 
-    public class Request {
-        public uint Type { get; set; }
+    public class Message {
+        public byte Type { get; set; }
         public uint Id { get; set; }
         public string Route { get; set; }
         public byte[] Data { get; set; }
         public bool Err { get; set; }
+        public bool Compressed { get; set; }
+    }
+
+    public class PendingRequest {
+        public Message msg {get; set;}
+        // sentAt time.Time
     }
 
 }
