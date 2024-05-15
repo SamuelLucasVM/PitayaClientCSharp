@@ -24,6 +24,7 @@ namespace Pitaya
         private static NetworkStream _stream = null;
         private SessionHandshakeData _clientHandshake = null;
         private Channel<Packet> _packetChann = null;
+        private Channel<Message> _incomingMsgChann = null;
         private Channel<bool> _pendingChann = null;
         private Dictionary<uint, PendingRequest> _pendingRequests = null;
         private bool DataCompression = false;
@@ -54,6 +55,7 @@ namespace Pitaya
 
             _packetChann = Channel.CreateUnbounded<Packet>();
             _pendingChann = Channel.CreateBounded<bool>(30);
+            _incomingMsgChann = Channel.CreateBounded<Message>(10);
         }
 
         ~PitayaClient()
@@ -139,11 +141,44 @@ namespace Pitaya
 
             Thread sendHeartBeats = new Thread(() => SendHeartbeats((int)handshake.Sys.Heartbeat));
             Thread handleServerMessages = new Thread(() => HandleServerMessages());
+            Thread handlePackets = new Thread(() => HandlePackets());
             // var pendingRequestsReaperTask = Task.Run(() => pendingRequestsReaper());
 
             sendHeartBeats.Start();
             handleServerMessages.Start();
+            handlePackets.Start();
             // var handlePacketsTask = Task.Run(() => handlePackets());
+        }
+
+        private async Task HandlePackets(){
+            while(await _packetChann.Reader.WaitToReadAsync()){
+                while(_packetChann.Reader.TryRead(out Packet packet)){
+                    switch(packet.Type){
+                        case PitayaGoToCSConstants.Data:
+                            Console.WriteLine("got data: " + System.Text.Encoding.UTF8.GetString(packet.Data));
+                            Message message = EncoderDecoder.DecodeMsg(packet.Data);
+                            if(message.Type == PitayaGoToCSConstants.Response){
+                                /*
+                                c.pendingReqMutex.Lock()
+                                if _, ok := c.pendingRequests[m.ID]; ok {
+                                    delete(c.pendingRequests, m.ID)
+                                    <-c.pendingChan
+                                } else {
+                                    c.pendingReqMutex.Unlock()
+                                    continue // do not process msg for already timedout request
+                                }
+                                c.pendingReqMutex.Unlock()
+                                */
+                            }
+                            await _incomingMsgChann.Writer.WriteAsync(message);
+                            break;
+                        case PitayaGoToCSConstants.Kick:
+                            Console.WriteLine("got kick packet from the server! disconnecting...");
+                            Disconnect();
+                            break;
+                    }
+                }
+            }
         }
 
         private async Task HandleServerMessages() {
