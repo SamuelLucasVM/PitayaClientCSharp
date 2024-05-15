@@ -20,4 +20,25 @@ namespace Pitaya.NativeImpl {
         public ErrPacketSizeExcced(string message) : base(message) { }
         public ErrPacketSizeExcced(string message, Exception inner) : base(message, inner) { }
     }
+
+    [Serializable]
+    public class ErrWrongMessageType : Exception {
+        public ErrWrongMessageType() : base("wrong message type") { }
+        public ErrWrongMessageType(string message) : base(message) { }
+        public ErrWrongMessageType(string message, Exception inner) : base(message, inner) { }
+    }
+
+    [Serializable]
+    public class ErrInvalidMessage : Exception {
+        public ErrInvalidMessage() : base("invalid message") { }
+        public ErrInvalidMessage(string message) : base(message) { }
+        public ErrInvalidMessage(string message, Exception inner) : base(message, inner) { }
+    }
+
+    [Serializable]
+    public class ErrRouteInfoNotFound : Exception {
+        public ErrRouteInfoNotFound() : base("route info not found in dictionary") { }
+        public ErrRouteInfoNotFound(string message) : base(message) { }
+        public ErrRouteInfoNotFound(string message, Exception inner) : base(message, inner) { }
+    }
 }
