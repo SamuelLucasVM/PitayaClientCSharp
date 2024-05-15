@@ -87,7 +87,8 @@ namespace Pitaya.NativeImpl
             return buf;
         }
 
-        public static byte[] EncodeMsg(Message message) {
+        public static byte[] EncodeMsg(Message message)
+        {
             // if InvalidType(message.Type) {
             //     return nil, ErrWrongMessageType
             // }
@@ -154,9 +155,10 @@ namespace Pitaya.NativeImpl
         }
         public static Message DecodeMsg(byte[] data)
         {
-            /*if len(data) < msgHeadLength {
-                return nil, ErrInvalidMessage
-            }*/
+            if (data.Length < PitayaGoToCSConstants.msgHeadLength)
+            {
+                throw new ErrInvalidMessage();
+            }
 
             Message message = new Message();
             byte flag = data[0];
@@ -166,9 +168,11 @@ namespace Pitaya.NativeImpl
             // it's a cast to Type in golang
             message.Type = (byte)((flag >> 1) & PitayaGoToCSConstants.msgTypeMask);
 
-            //if invalidType(message.Type) {
-            //    return nil, ErrWrongMessageType
-            //}
+            // Func invalidType
+            if (message.Type < PitayaGoToCSConstants.Request || message.Type > PitayaGoToCSConstants.Push)
+            {
+                throw new ErrWrongMessageType();
+            }
 
             if (message.Type == PitayaGoToCSConstants.Request || message.Type == PitayaGoToCSConstants.Response)
             {
@@ -195,14 +199,15 @@ namespace Pitaya.NativeImpl
 
             int size = data.Length;
 
-            //routable
+            //func routable
             if (message.Type == PitayaGoToCSConstants.Request || message.Type == PitayaGoToCSConstants.Notify || message.Type == PitayaGoToCSConstants.Push)
             {
                 if ((flag & PitayaGoToCSConstants.msgRouteCompressMask) == 1)
                 {
-                    //if offset > size || (offset+2) > size {
-                    //   return nil, ErrInvalidMessage
-                    //}
+                    if (offset > size || (offset + 2) > size)
+                    {
+                        throw new ErrInvalidMessage();
+                    }
 
                     message.Compressed = true;
 
@@ -224,17 +229,18 @@ namespace Pitaya.NativeImpl
                     byte rl = data[offset];
                     offset++;
 
-                    // if offset > size || (offset+int(rl)) > size {
-                    //    return nil, ErrInvalidMessage
-                    //}
+                    if (offset > size || (offset + rl) > size)
+                    {
+                        throw new ErrInvalidMessage();
+                    }
                     message.Route = System.Text.Encoding.UTF8.GetString(data, offset, offset + rl);
                     offset += rl;
                 }
             }
 
-            //if offset > size {
-            //    return nil, ErrInvalidMessage
-            //}
+            if (offset > size) {
+                throw new ErrInvalidMessage();
+            }
 
             byte[] decodedMessageData = new byte[data.Length - offset];
             Array.Copy(data, offset, decodedMessageData, 0, decodedMessageData.Length);
@@ -242,10 +248,7 @@ namespace Pitaya.NativeImpl
 
             if ((flag & PitayaGoToCSConstants.gzipMask) == PitayaGoToCSConstants.gzipMask)
             {
-                //m.Data, err = compression.InflateData(m.Data)
-                //if err != nil {
-                //    return nil, err
-                //}
+                message.Data = Compression.InflateData(message.Data);
             }
 
             return message;
