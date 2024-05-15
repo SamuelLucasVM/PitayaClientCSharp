@@ -204,7 +204,7 @@ namespace Pitaya.NativeImpl
                     //   return nil, ErrInvalidMessage
                     //}
 
-                    // message.compressed = true
+                    message.Compressed = true;
 
                     // The line below should be the same as: code := binary.BigEndian.Uint16(data[offset:(offset + 2)])
                     ushort code = (ushort)((data[offset] << 8) | data[offset + 1]);
@@ -220,7 +220,7 @@ namespace Pitaya.NativeImpl
                 }
                 else
                 {
-                    //m.compressed = false
+                    message.Compressed = false;
                     byte rl = data[offset];
                     offset++;
 
