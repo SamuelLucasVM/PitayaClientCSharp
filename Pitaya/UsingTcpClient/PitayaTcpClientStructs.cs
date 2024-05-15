@@ -43,8 +43,7 @@ namespace Pitaya.NativeImpl {
     }
 
     public class PendingRequest {
-        public Message msg {get; set;}
-        // sentAt time.Time
+        public Message Msg {get; set;}
+        public DataTime SentAt { get; set; }
     }
-
 }
