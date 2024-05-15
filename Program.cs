@@ -15,9 +15,9 @@ namespace Pitaya
 
             const string route = "requestor.requestor.getaccounts";
 
-            client.SendRequest(route, []);
+            // client.SendRequest(route, []);
 
-            while(true) {}
+            // while(true) {}
         }
     }
 }

@@ -31,7 +31,7 @@ namespace Pitaya
         private bool DataCompression = false;
         private bool Connected = false;
         private EventManager _eventManager;
-        private bool _disposed;
+        private bool _disposed = false;
         private uint _reqUid;
         private Dictionary<uint, Action<string, string>> _requestHandlers;
         private IPitayaBinding _binding = new PitayaBinding();
@@ -57,6 +57,9 @@ namespace Pitaya
             _packetChan = Channel.CreateUnbounded<Packet>();
             _pendingChan = Channel.CreateBounded<bool>(30);
             _incomingMsgChann = Channel.CreateBounded<Message>(10);
+
+            _reqUid = 0;
+            _eventManager = new EventManager();
         }
 
         ~PitayaClient()
@@ -83,15 +86,15 @@ namespace Pitaya
 //             }
 //         }
 
-        public static void SetLogLevel(PitayaLogLevel level)
-        {
-            StaticPitayaBinding.SetLogLevel(level);
-        }
+        // public static void SetLogLevel(PitayaLogLevel level)
+        // {
+        //     StaticPitayaBinding.SetLogLevel(level);
+        // }
 
-        public static void SetLogFunction(NativeLogFunction fn)
-        {
-            StaticPitayaBinding.SetLogFunction(fn);
-        }
+        // public static void SetLogFunction(NativeLogFunction fn)
+        // {
+        //     StaticPitayaBinding.SetLogFunction(fn);
+        // }
 
         // public int Quality
         // {
@@ -104,18 +107,18 @@ namespace Pitaya
         //     get { return _binding.State(_client); }
         // }
 
-        private byte[] BuildPacket(Message data) {
+        byte[] BuildPacket(Message data) {
             byte[] encMsg = EncoderDecoder.EncodeMsg(data);
 
             return EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Data, encMsg);
         }
 
-        private void HandleHandshake() {
+        void HandleHandshake() {
             SendHandshakeRequest();
             HandleHandshakeResponse();
         }
 
-        private async Task HandleHandshakeResponse() {
+        async Task HandleHandshakeResponse() {
             Packet[] packets = await ReadPackets();
 
             Packet handshakePacket = packets[0];
@@ -151,7 +154,7 @@ namespace Pitaya
             pendingRequestsReaper.Start();
         }
 
-        private async Task HandlePackets(){
+        async Task HandlePackets(){
             while(await _packetChan.Reader.WaitToReadAsync()){
                 while(_packetChan.Reader.TryRead(out Packet packet)){
                     switch(packet.Type){
@@ -182,7 +185,7 @@ namespace Pitaya
             }
         }
 
-        private async Task HandleServerMessages() {
+        async Task HandleServerMessages() {
             try {
                 while (Connected) {
                     Packet[] packets = await ReadPackets();
@@ -198,7 +201,7 @@ namespace Pitaya
         }
         
         // pendingRequestsReaper delete timedout requests
-        private async Task PendingRequestsReaper() {
+        async Task PendingRequestsReaper() {
             while (true) {
                 // select {
                 // case <-ticker.C:
@@ -234,7 +237,7 @@ namespace Pitaya
             }
         }
 
-        private async Task SendHeartbeats(int interval) {
+        async Task SendHeartbeats(int interval) {
             try {
                 while (true) {
                     Console.WriteLine(interval);
@@ -247,7 +250,7 @@ namespace Pitaya
             }
         }
 
-        private async Task SendHandshakeRequest() {
+        async Task SendHandshakeRequest() {
             string enc = Newtonsoft.Json.JsonConvert.SerializeObject(_clientHandshake);
             byte[] encBytes = Encoding.UTF8.GetBytes(enc);
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Handshake, encBytes);
@@ -263,10 +266,16 @@ namespace Pitaya
             HandleHandshake();
         }
 
-        public async Task SendRequest(string route, byte[] data) {
+        // public void Connect(string host, int port, Dictionary<string, string> handshakeOpts)
+        // {
+        //     var opts = Pitaya.SimpleJson.SimpleJson.SerializeObject(handshakeOpts);
+        //     _binding.Connect(_client, host, port, opts);
+        // }
+
+        async Task SendMsg(string route, byte[] data, uint reqUid, int timeout) {
             Message request = new Message(){
                 Type = PitayaGoToCSConstants.Request,
-                Id = 1,
+                Id = reqUid,
                 Route = route,
                 Data = data,
                 Err = false
@@ -277,7 +286,7 @@ namespace Pitaya
             await _stream.WriteAsync(byteRequest, 0, byteRequest.Length);
         }
 
-        private static async Task<Packet[]> ReadPackets() {
+        static async Task<Packet[]> ReadPackets() {
             // listen for sv messages
             MemoryStream buf = new MemoryStream();
 
@@ -302,80 +311,74 @@ namespace Pitaya
             return packets;
         }
 
-        // public void Connect(string host, int port, Dictionary<string, string> handshakeOpts)
-        // {
-        //     var opts = Pitaya.SimpleJson.SimpleJson.SerializeObject(handshakeOpts);
-        //     _binding.Connect(_client, host, port, opts);
-        // }
-
-        /// <summary>
-        /// <para>DEPRECATED. Use <see cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)"/> instead.</para>
-        /// </summary>
-        // public void Request(string route, Action<string> action, Action<PitayaError> errorAction)
-        // {
-        //     Request(route, (string) null, action, errorAction);
-        // }
-
-        /// <summary>
-        /// <para>DEPRECATED. Use <see cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)"/> instead.</para>
-        /// </summary>
-        // public void Request<T>(string route, Action<T> action, Action<PitayaError> errorAction)
-        // {
-        //     Request(route, null, action, errorAction);
-        // }
-
         /// <summary cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)">
         /// </summary>
-        // public void Request<TResponse>(string route, object msg, Action<TResponse> action, Action<PitayaError> errorAction, int timeout = -1)
-        // {
-        //     IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
-        //     if (msg is IMessage) serializer = SerializerFactory.CreateProtobufSerializer(_binding.ClientSerializer(_client));
-        //     RequestInternal(route, msg, timeout, serializer, action, errorAction);
-        // }
+        public void Request<TResponse>(string route, object msg, Action<TResponse> action, Action<PitayaError> errorAction, int timeout = -1)
+        {
+            IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
+            if (msg is IMessage) serializer = SerializerFactory.CreateProtobufSerializer(ProtobufSerializer.SerializationFormat.Protobuf);
+            RequestInternal(route, msg, timeout, serializer, action, errorAction);
+        }
 
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)"/> instead.</para>
         /// </summary>
-        // public void Request(string route, string msg, Action<string> action, Action<PitayaError> errorAction)
-        // {
-        //     Request(route, msg, -1, action, errorAction);
-        // }
+        public void Request(string route, Action<string> action, Action<PitayaError> errorAction)
+        {
+            Request(route, (string) null, action, errorAction);
+        }
 
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)"/> instead.</para>
         /// </summary>
-        // public void Request<T>(string route, IMessage msg, Action<T> action, Action<PitayaError> errorAction)
-        // {
-        //     Request(route, msg, -1, action, errorAction);
-        // }
+        public void Request<T>(string route, Action<T> action, Action<PitayaError> errorAction)
+        {
+            Request(route, null, action, errorAction);
+        }
 
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)"/> instead.</para>
         /// </summary>
-        // public void Request<T>(string route, IMessage msg, int timeout, Action<T> action, Action<PitayaError> errorAction)
-        // {
-        //     ProtobufSerializer.SerializationFormat format = _binding.ClientSerializer(_client);
-        //     RequestInternal(route, msg, timeout, SerializerFactory.CreateProtobufSerializer(format), action, errorAction);
-        // }
+        public void Request(string route, string msg, Action<string> action, Action<PitayaError> errorAction)
+        {
+            Request(route, msg, -1, action, errorAction);
+        }
 
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)"/> instead.</para>
         /// </summary>
-        // public void Request(string route, string msg, int timeout, Action<string> action, Action<PitayaError> errorAction)
-        // {
-        //     RequestInternal(route, msg, timeout, new LegacyJsonSerializer(), action, errorAction);
-        // }
+        public void Request<T>(string route, IMessage msg, Action<T> action, Action<PitayaError> errorAction)
+        {
+            Request(route, msg, -1, action, errorAction);
+        }
 
-        // void RequestInternal<TResponse, TRequest>(string route, TRequest msg, int timeout, IPitayaSerializer serializer, Action<TResponse> action, Action<PitayaError> errorAction)
-        // {
-        //     _reqUid++;
+        /// <summary>
+        /// <para>DEPRECATED. Use <see cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)"/> instead.</para>
+        /// </summary>
+        public void Request<T>(string route, IMessage msg, int timeout, Action<T> action, Action<PitayaError> errorAction)
+        {
+            ProtobufSerializer.SerializationFormat format = ProtobufSerializer.SerializationFormat.Protobuf;
+            RequestInternal(route, msg, timeout, SerializerFactory.CreateProtobufSerializer(format), action, errorAction);
+        }
 
-        //     Action<byte[]> responseAction = res => { action(serializer.Decode<TResponse>(res)); };
+        /// <summary>
+        /// <para>DEPRECATED. Use <see cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)"/> instead.</para>
+        /// </summary>
+        public void Request(string route, string msg, int timeout, Action<string> action, Action<PitayaError> errorAction)
+        {
+            RequestInternal(route, msg, timeout, new LegacyJsonSerializer(), action, errorAction);
+        }
 
-        //     _eventManager.AddCallBack(_reqUid, responseAction, errorAction);
+        void RequestInternal<TResponse, TRequest>(string route, TRequest msg, int timeout, IPitayaSerializer serializer, Action<TResponse> action, Action<PitayaError> errorAction)
+        {
+            _reqUid++;
 
-        // _binding.Request(_client, route, serializer.Encode(msg), _reqUid, timeout);
-        // }
+            Action<byte[]> responseAction = res => { action(serializer.Decode<TResponse>(res)); };
+
+            _eventManager.AddCallBack(_reqUid, responseAction, errorAction);
+
+            SendMsg(route, serializer.Encode(msg), _reqUid, timeout);
+        }
 
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Notify(string, object, int)"/> instead.</para>
@@ -428,20 +431,20 @@ namespace Pitaya
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="OnRoute&lt;T&gt;(string, Action&lt;T&gt;)"/> instead.</para>
         /// </summary>
-        // public void OnRoute(string route, Action<string> action)
-        // {
-        //     OnRouteInternal(route, action, new LegacyJsonSerializer());
-        // }
+        public void OnRoute(string route, Action<string> action)
+        {
+            OnRouteInternal(route, action, new LegacyJsonSerializer());
+        }
 
         /// <summary cref="OnRoute&lt;T&gt;(string, Action&lt;T&gt;)">
         /// </summary>
-        // public void OnRoute<T>(string route, Action<T> action)
-        // {
-        //     IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
-        //     if (typeof(IMessage).IsAssignableFrom(typeof(T))) serializer = SerializerFactory.CreateProtobufSerializer(_binding.ClientSerializer(_client));
+        public void OnRoute<T>(string route, Action<T> action)
+        {
+            IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
+            if (typeof(IMessage).IsAssignableFrom(typeof(T))) serializer = SerializerFactory.CreateProtobufSerializer(ProtobufSerializer.SerializationFormat.Protobuf);
 
-        //     OnRouteInternal(route, action, serializer);
-        // }
+            OnRouteInternal(route, action, serializer);
+        }
 
         private void OnRouteInternal<T>(string route, Action<T> action, IPitayaSerializer serializer)
         {
@@ -462,11 +465,6 @@ namespace Pitaya
                 _client.Close();
             }
         }
-
-        // public void Disconnect()
-        // {
-        //     _binding.Disconnect(_client);
-        // }
 
         //---------------Pitaya Listener------------------------//
 
@@ -492,18 +490,17 @@ namespace Pitaya
 
         public void Dispose()
         {
-        //     Debug.Log(string.Format("PitayaClient Disposed {0}", _client));
-        //     if (_disposed)
-        //         return;
+            Console.WriteLine(string.Format("PitayaClient Disposed {0}", _client));
+            if (_disposed)
+                return;
 
-        //     if (_eventManager != null) _eventManager.Dispose();
+            if (_eventManager != null) _eventManager.Dispose();
 
-        //     _reqUid = 0;
-        //     _binding.Disconnect(_client);
-        //     _binding.Dispose(_client);
+            _reqUid = 0;
+            _client.Close();
 
-        //     _client = IntPtr.Zero;
-        //     _disposed = true;
+            _client = null;
+            _disposed = true;
         }
 
         public void ClearAllCallbacks()
