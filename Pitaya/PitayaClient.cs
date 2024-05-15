@@ -23,9 +23,10 @@ namespace Pitaya
         private TcpClient _client = null;
         private static NetworkStream _stream = null;
         private SessionHandshakeData _clientHandshake = null;
-        private Channel<Packet> _packetChann = null;
-        private Channel<bool> _pendingChann = null;
+        private Channel<Packet> _packetChan = null;
+        private Channel<bool> _pendingChan = null;
         private Dictionary<uint, PendingRequest> _pendingRequests = null;
+        private Dictionary<uint, PendingRequest> _requestTimeout = 5; //5seconds
         private bool DataCompression = false;
         private bool Connected = false;
         private EventManager _eventManager;
@@ -52,13 +53,13 @@ namespace Pitaya
 		    };
             _clientHandshake.User["age"] = 30;
 
-            _packetChann = Channel.CreateUnbounded<Packet>();
-            _pendingChann = Channel.CreateBounded<bool>(30);
+            _packetChan = Channel.CreateUnbounded<Packet>();
+            _pendingChan = Channel.CreateBounded<bool>(30);
         }
 
         ~PitayaClient()
         {
-            // Dispose();
+            Dispose();
         }
 
 //         private void Init(string certificateName, bool enableTlS, bool enablePolling, bool enableReconnect, int connTimeout, ISerializerFactory serializerFactory)
@@ -139,7 +140,7 @@ namespace Pitaya
 
             Thread sendHeartBeats = new Thread(() => SendHeartbeats((int)handshake.Sys.Heartbeat));
             Thread handleServerMessages = new Thread(() => HandleServerMessages());
-            // var pendingRequestsReaperTask = Task.Run(() => pendingRequestsReaper());
+            Thread pendingRequestsReaperTask = new Thread(() => PendingRequestsReaper());
 
             sendHeartBeats.Start();
             handleServerMessages.Start();
@@ -152,13 +153,51 @@ namespace Pitaya
                     Packet[] packets = await ReadPackets();
 
                     foreach (Packet p in packets) {
-                        await _packetChann.Writer.WriteAsync(p);
+                        await _packetChan.Writer.WriteAsync(p);
                     }
                 }
             } finally {
                 Disconnect();
             }
 
+        }
+        
+        // pendingRequestsReaper delete timedout requests
+        private async Task PendingRequestsReaper() {
+            ticker := time.NewTicker(1 * time.Second)
+            while (true) {
+                // select {
+                // case <-ticker.C:
+                    List<PendingRequest> toDelete = new List<PendingRequest>();
+                    c.pendingReqMutex.Lock();
+                    foreach (v in _pendingRequests) {
+                        if time.Now().Sub(v.sentAt) > c.requestTimeout {
+                            toDelete.Add(v);
+                        }
+                    }
+
+                    foreach (PedingRequest pendingReq in toDelete) {
+                        // err := pitaya.Error(errors.New("request timeout"), "PIT-504")
+                        // errMarshalled, _ := json.Marshal(err)
+                        // send a timeout to incoming msg chan
+                        Message m = new Message(){
+                            Type = PitayaGoToCSConstants.Response,
+                            ID = pendingReq.Msg.Id,
+                            Route = pendingReq.Msg.Route,
+                            // Data = errMarshalled,
+                            Err = true,
+                        }
+                        // delete(c.pendingRequests, pendingReq.msg.ID)
+                        // <-c.pendingChan
+                        // c.IncomingMsgChan <- m
+                    }
+                    c.pendingReqMutex.Unlock()
+
+                    await Task.Delay(1000);
+                // case <-c.closeChan:
+                //     return
+                }
+            }
         }
 
         private async Task SendHeartbeats(int interval) {
@@ -417,8 +456,8 @@ namespace Pitaya
             _eventManager.InvokeOnEvent(route, serializedBody);
         }
 
-        // public void Dispose()
-        // {
+        public void Dispose()
+        {
         //     Debug.Log(string.Format("PitayaClient Disposed {0}", _client));
         //     if (_disposed)
         //         return;
@@ -431,7 +470,7 @@ namespace Pitaya
 
         //     _client = IntPtr.Zero;
         //     _disposed = true;
-        // }
+        }
 
         public void ClearAllCallbacks()
         {
