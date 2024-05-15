@@ -27,7 +27,7 @@ namespace Pitaya
         private Channel<Message> _incomingMsgChann = null;
         private Channel<bool> _pendingChan = null;
         private Dictionary<uint, PendingRequest> _pendingRequests = null;
-        private Dictionary<uint, PendingRequest> _requestTimeout = 5; //5seconds
+        private uint _requestTimeout = 5; //5seconds
         private bool DataCompression = false;
         private bool Connected = false;
         private EventManager _eventManager;
@@ -143,17 +143,17 @@ namespace Pitaya
             Thread sendHeartBeats = new Thread(() => SendHeartbeats((int)handshake.Sys.Heartbeat));
             Thread handleServerMessages = new Thread(() => HandleServerMessages());
             Thread handlePackets = new Thread(() => HandlePackets());
-            Thread pendingRequestsReaperTask = new Thread(() => PendingRequestsReaper());
+            Thread pendingRequestsReaper = new Thread(() => PendingRequestsReaper());
 
             sendHeartBeats.Start();
             handleServerMessages.Start();
             handlePackets.Start();
-            // var handlePacketsTask = Task.Run(() => handlePackets());
+            pendingRequestsReaper.Start();
         }
 
         private async Task HandlePackets(){
-            while(await _packetChann.Reader.WaitToReadAsync()){
-                while(_packetChann.Reader.TryRead(out Packet packet)){
+            while(await _packetChan.Reader.WaitToReadAsync()){
+                while(_packetChan.Reader.TryRead(out Packet packet)){
                     switch(packet.Type){
                         case PitayaGoToCSConstants.Data:
                             Console.WriteLine("got data: " + System.Text.Encoding.UTF8.GetString(packet.Data));
@@ -199,39 +199,38 @@ namespace Pitaya
         
         // pendingRequestsReaper delete timedout requests
         private async Task PendingRequestsReaper() {
-            ticker := time.NewTicker(1 * time.Second)
             while (true) {
                 // select {
                 // case <-ticker.C:
                     List<PendingRequest> toDelete = new List<PendingRequest>();
-                    c.pendingReqMutex.Lock();
-                    foreach (v in _pendingRequests) {
-                        if time.Now().Sub(v.sentAt) > c.requestTimeout {
-                            toDelete.Add(v);
-                        }
+                    // c.pendingReqMutex.Lock();
+                    foreach (PendingRequest v in _pendingRequests.Values) {
+                        // if time.Now().Sub(v.sentAt) > c.requestTimeout {
+                        //     toDelete.Add(v);
+                        // }
                     }
 
-                    foreach (PedingRequest pendingReq in toDelete) {
+                    foreach (PendingRequest pendingReq in toDelete) {
                         // err := pitaya.Error(errors.New("request timeout"), "PIT-504")
                         // errMarshalled, _ := json.Marshal(err)
                         // send a timeout to incoming msg chan
                         Message m = new Message(){
                             Type = PitayaGoToCSConstants.Response,
-                            ID = pendingReq.Msg.Id,
+                            Id = pendingReq.Msg.Id,
                             Route = pendingReq.Msg.Route,
                             // Data = errMarshalled,
                             Err = true,
-                        }
+                        };
                         // delete(c.pendingRequests, pendingReq.msg.ID)
                         // <-c.pendingChan
                         // c.IncomingMsgChan <- m
                     }
-                    c.pendingReqMutex.Unlock()
+                    // c.pendingReqMutex.Unlock()
 
                     await Task.Delay(1000);
                 // case <-c.closeChan:
                 //     return
-                }
+                // }
             }
         }
 
