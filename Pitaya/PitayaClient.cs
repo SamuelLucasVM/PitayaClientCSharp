@@ -169,6 +169,7 @@ namespace Pitaya
                             Console.WriteLine("got data: " + System.Text.Encoding.UTF8.GetString(packet.Data));
                             Message message = EncoderDecoder.DecodeMsg(packet.Data);
                             if(message.Type == PitayaGoToCSConstants.Response){
+                                OnRequestResponse(message.Id, message.Data);
                                 /*
                                 c.pendingReqMutex.Lock()
                                 if _, ok := c.pendingRequests[m.ID]; ok {
