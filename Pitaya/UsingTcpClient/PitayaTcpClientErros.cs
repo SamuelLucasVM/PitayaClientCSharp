@@ -1,3 +1,5 @@
+using System;
+
 namespace Pitaya.NativeImpl {
     [Serializable]
     public class ErrInvalidPomeloHeader : Exception {

@@ -1,15 +1,9 @@
+using System;
+using System.IO;
 using System.Runtime.Serialization;
 
 namespace Pitaya.NativeImpl {
     public static class Utils {
-        public static void WriteBytes(byte[] bytes) {
-            foreach (byte b in bytes) {
-                Console.Write(b);
-                Console.Write(" ");
-            }
-            Console.WriteLine("");
-        }
-
         public static byte[] IntToBytes(int n) {
             byte[] buf = new byte[3];
             buf[0] = (byte)((n >> 16) & 0xFF);

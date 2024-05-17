@@ -1,3 +1,7 @@
+using System.IO;
+using System;
+using System.Collections.Generic;
+
 namespace Pitaya.NativeImpl
 {
     public static class EncoderDecoder

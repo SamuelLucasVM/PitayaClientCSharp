@@ -10,10 +10,10 @@ namespace Pitaya
         event Action<PitayaNetWorkState, NetworkError> NetWorkStateChangedEvent;
         
         // int Quality { get; }
-        // PitayaClientState State { get; }
+        PitayaClientState State { get; }
         // ISerializerFactory SerializerFactory { get; set; }
         void Connect(string host, int port);
-        // void Connect(string host, int port, Dictionary<string, string> handshakeOpts);
+        void Connect(string host, int port, Dictionary<string, string> handshakeOpts);
 
         // <summary cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)">
         // </summary>

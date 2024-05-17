@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using System.Text;
 using Pitaya.NativeImpl;
 
+using System.Threading.Tasks;
 using System.Threading;
 using System.Threading.Channels;
 
@@ -17,6 +18,8 @@ namespace Pitaya
         public event Action<PitayaNetWorkState, NetworkError> NetWorkStateChangedEvent;
 
         public ISerializerFactory SerializerFactory { get; set; }
+
+        public PitayaClientState State { get; set; } = PitayaClientState.Unknown;
         
         private const int DEFAULT_CONNECTION_TIMEOUT = 30;
 
@@ -60,6 +63,8 @@ namespace Pitaya
 
             _reqUid = 0;
             _eventManager = new EventManager();
+
+            State = PitayaClientState.Inited;
         }
 
         ~PitayaClient()
@@ -152,6 +157,8 @@ namespace Pitaya
             handleServerMessages.Start();
             handlePackets.Start();
             pendingRequestsReaper.Start();
+
+            State = PitayaClientState.Connected;
         }
 
         async Task HandlePackets(){
@@ -260,17 +267,20 @@ namespace Pitaya
 
         public void Connect(string host, int port)
         {
+            State = PitayaClientState.Connecting;
+
             _client.Connect(host, port);
             _stream = _client.GetStream();
 
             HandleHandshake();
         }
 
-        // public void Connect(string host, int port, Dictionary<string, string> handshakeOpts)
-        // {
-        //     var opts = Pitaya.SimpleJson.SimpleJson.SerializeObject(handshakeOpts);
-        //     _binding.Connect(_client, host, port, opts);
-        // }
+        public void Connect(string host, int port, Dictionary<string, string> handshakeOpts)
+        {
+            Connect(host, port);
+            // var opts = Pitaya.SimpleJson.SimpleJson.SerializeObject(handshakeOpts);
+            // _binding.Connect(_client, host, port, opts);
+        }
 
         async Task SendMsg(string route, byte[] data, uint reqUid, int timeout) {
             Message request = new Message(){
@@ -460,6 +470,7 @@ namespace Pitaya
         // Disconnect disconnects the client
         public void Disconnect() {
             if (Connected) {
+                State = PitayaClientState.Disconnecting;
                 Connected = false;
                 // close(c.closeChan);
                 _client.Close();

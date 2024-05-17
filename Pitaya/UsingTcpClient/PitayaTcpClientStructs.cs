@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace Pitaya.NativeImpl {
 
     // HandshakeClientData represents information about the client sent on the handshake.
