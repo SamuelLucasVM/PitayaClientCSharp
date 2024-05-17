@@ -30,7 +30,7 @@ namespace Pitaya
         private Channel<Message> _incomingMsgChann = null;
         private Channel<bool> _pendingChan = null;
         private Dictionary<uint, PendingRequest> _pendingRequests = null;
-        private uint _requestTimeout = 5; //5seconds
+        private uint _requestTimeout = 5000; //5seconds
         private bool DataCompression = false;
         private bool Connected = false;
         private EventManager _eventManager;
@@ -45,6 +45,7 @@ namespace Pitaya
         public PitayaClient(bool enableReconnect = false, string certificateName = null, int connectionTimeout = DEFAULT_CONNECTION_TIMEOUT, IPitayaQueueDispatcher queueDispatcher = null, IPitayaBinding binding = null)
         {
             _client = new TcpClient();
+            SerializerFactory = new SerializerFactory();
 
             _clientHandshake = new SessionHandshakeData {
 			    Sys = new HandshakeClientData {
@@ -65,6 +66,7 @@ namespace Pitaya
             _eventManager = new EventManager();
 
             State = PitayaClientState.Inited;
+            _pendingRequests = new Dictionary<uint, PendingRequest>();
         }
 
         ~PitayaClient()
@@ -169,7 +171,10 @@ namespace Pitaya
                             Console.WriteLine("got data: " + System.Text.Encoding.UTF8.GetString(packet.Data));
                             Message message = EncoderDecoder.DecodeMsg(packet.Data);
                             if(message.Type == PitayaGoToCSConstants.Response){
-                                OnRequestResponse(message.Id, message.Data);
+                                if (_pendingRequests[message.Id] != null) {
+                                    OnRequestResponse(message.Id, message.Data);
+                                    _pendingRequests.Remove(message.Id);
+                                }
                                 /*
                                 c.pendingReqMutex.Lock()
                                 if _, ok := c.pendingRequests[m.ID]; ok {
@@ -216,22 +221,23 @@ namespace Pitaya
                     List<PendingRequest> toDelete = new List<PendingRequest>();
                     // c.pendingReqMutex.Lock();
                     foreach (PendingRequest v in _pendingRequests.Values) {
-                        // if time.Now().Sub(v.sentAt) > c.requestTimeout {
-                        //     toDelete.Add(v);
-                        // }
+                        if ((uint)(DateTime.Now.TimeOfDay.TotalSeconds - v.SentAt.TotalSeconds) > _requestTimeout) {
+                            toDelete.Add(v);
+                        }
                     }
 
                     foreach (PendingRequest pendingReq in toDelete) {
                         // err := pitaya.Error(errors.New("request timeout"), "PIT-504")
                         // errMarshalled, _ := json.Marshal(err)
                         // send a timeout to incoming msg chan
-                        Message m = new Message(){
+                        Message m = new Message {
                             Type = PitayaGoToCSConstants.Response,
                             Id = pendingReq.Msg.Id,
                             Route = pendingReq.Msg.Route,
                             // Data = errMarshalled,
                             Err = true,
                         };
+                        _pendingRequests.Remove(m.Id);
                         // delete(c.pendingRequests, pendingReq.msg.ID)
                         // <-c.pendingChan
                         // c.IncomingMsgChan <- m
@@ -283,18 +289,41 @@ namespace Pitaya
             // _binding.Connect(_client, host, port, opts);
         }
 
-        async Task SendMsg(string route, byte[] data, uint reqUid, int timeout) {
-            Message request = new Message(){
-                Type = PitayaGoToCSConstants.Request,
-                Id = reqUid,
+        // async Task SendMsg(string route, byte[] data, uint reqUid, int timeout) {
+        //     Message request = new Message(){
+        //         Type = PitayaGoToCSConstants.Request,
+        //         Id = reqUid,
+        //         Route = route,
+        //         Data = data,
+        //         Err = false
+        //     };
+
+        //     byte[] byteRequest = BuildPacket(request);
+            
+        //     await _stream.WriteAsync(byteRequest, 0, byteRequest.Length);
+        // }
+
+        async Task SendMsg(byte msgType, string route, byte[] data) {
+            Message m = new Message {
+                Type = msgType,
+                Id = _reqUid,
                 Route = route,
                 Data = data,
                 Err = false
             };
 
-            byte[] byteRequest = BuildPacket(request);
+            byte[] byteMsg = BuildPacket(m);
+            if (msgType == PitayaGoToCSConstants.Request) {
+                // _pendingChan
+                PendingRequest newRequest = new PendingRequest {
+                    Msg = m,
+                    SentAt = DateTime.Now.TimeOfDay,
+                };
+                _pendingRequests[m.Id] = newRequest;
+            }
             
-            await _stream.WriteAsync(byteRequest, 0, byteRequest.Length);
+            await _stream.WriteAsync(byteMsg, 0, byteMsg.Length);
+
         }
 
         static async Task<Packet[]> ReadPackets() {
@@ -388,7 +417,7 @@ namespace Pitaya
 
             _eventManager.AddCallBack(_reqUid, responseAction, errorAction);
 
-            SendMsg(route, serializer.Encode(msg), _reqUid, timeout);
+            SendMsg(PitayaGoToCSConstants.Request, route, serializer.Encode(msg));
         }
 
         /// <summary>
