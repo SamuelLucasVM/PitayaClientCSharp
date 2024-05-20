@@ -9,9 +9,9 @@ namespace Pitaya
     {
         event Action<PitayaNetWorkState, NetworkError> NetWorkStateChangedEvent;
         
-        // int Quality { get; }
+        int Quality { get; }
         PitayaClientState State { get; }
-        // ISerializerFactory SerializerFactory { get; set; }
+        ISerializerFactory SerializerFactory { get; set; }
         void Connect(string host, int port);
         void Connect(string host, int port, Dictionary<string, string> handshakeOpts);
 
