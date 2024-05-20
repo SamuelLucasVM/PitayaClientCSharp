@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using Google.Protobuf;
 using System.Net.Sockets;
-using Newtonsoft.Json;
 using System.Text;
 using Pitaya.NativeImpl;
 
@@ -115,7 +114,7 @@ namespace Pitaya
                 _stream = _client.GetStream();
                 HandleHandshake();
             } else {
-                // Error - timeout
+                Console.WriteLine(string.Format("Connect Timeout: %1", _connTimeout));
             }
         }
 
@@ -323,7 +322,8 @@ namespace Pitaya
                 handshakePacket.Data = Compression.InflateData(handshakePacket.Data);
             }
 
-            handshake = JsonConvert.DeserializeObject<HandshakeData>(Encoding.Default.GetString(handshakePacket.Data));
+            IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
+            handshake = serializer.Decode<HandshakeData>(handshakePacket.Data);
 
             Console.WriteLine("got handshake from sv, data: " + handshake);
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.HandshakeAck, new byte[]{});
@@ -452,7 +452,7 @@ namespace Pitaya
         }
 
         async Task SendHandshakeRequest() {
-            string enc = Newtonsoft.Json.JsonConvert.SerializeObject(_clientHandshake);
+            string enc = Pitaya.SimpleJson.SimpleJson.SerializeObject(_clientHandshake);
             byte[] encBytes = Encoding.UTF8.GetBytes(enc);
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Handshake, encBytes);
 
