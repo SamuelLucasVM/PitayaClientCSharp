@@ -21,7 +21,7 @@ namespace Pitaya
 
         // <summary cref="Notify(string, object, int)">
         // </summary>
-        // void Notify(string route, object msg, int timeout = -1);
+        void Notify(string route, object msg, int timeout = -1);
 
         // <summary cref="OnRoute&lt;T&gt;(string, Action&lt;T&gt;)">
         // </summary>
@@ -66,22 +66,22 @@ namespace Pitaya
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Notify(string, object, int)"/> instead.</para>
         /// </summary>
-        // void Notify(string route, IMessage msg);
+        void Notify(string route, IMessage msg);
         
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Notify(string, object, int)"/> instead.</para>
         /// </summary>
-        // void Notify(string route, int timeout, IMessage msg);
+        void Notify(string route, int timeout, IMessage msg);
         
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Notify(string, object, int)"/> instead.</para>
         /// </summary>
-        // void Notify(string route, string msg);
+        void Notify(string route, string msg);
         
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Notify(string, object, int)"/> instead.</para>
         /// </summary>
-        // void Notify(string route, int timeout, string msg);
+        void Notify(string route, int timeout, string msg);
         
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="OnRoute(string, Action&lt;T&gt;)"/> instead.</para>

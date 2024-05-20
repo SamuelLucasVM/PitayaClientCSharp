@@ -211,52 +211,52 @@ namespace Pitaya
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Notify(string, object, int)"/> instead.</para>
         /// </summary>
-        // public void Notify(string route, IMessage msg)
-        // {
-        //     Notify(route, -1, msg);
-        // }
+        public void Notify(string route, IMessage msg)
+        {
+            Notify(route, -1, msg);
+        }
 
         /// <summary cref="Notify(string, object, int)">
         /// </summary>
-        // public void Notify(string route, object msg, int timeout = -1)
-        // {
-        //     IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
-        //     if (msg is IMessage) serializer = SerializerFactory.CreateProtobufSerializer(_binding.ClientSerializer(_client));
-        //     NotifyInternal(route, msg, serializer, timeout);
-        // }
+        public void Notify(string route, object msg, int timeout = -1)
+        {
+            IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
+            if (msg is IMessage) serializer = SerializerFactory.CreateProtobufSerializer(ProtobufSerializer.SerializationFormat.Protobuf);
+            NotifyInternal(route, msg, serializer, timeout);
+        }
 
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Notify(string, object, int)"/> instead.</para>
         /// </summary>
-        // public void Notify(string route, int timeout, IMessage msg)
-        // {
-        //     ProtobufSerializer.SerializationFormat format = _binding.ClientSerializer(_client);
-        //     NotifyInternal(route, msg, SerializerFactory.CreateProtobufSerializer(format), timeout);
-        // }
+        public void Notify(string route, int timeout, IMessage msg)
+        {
+            ProtobufSerializer.SerializationFormat format = ProtobufSerializer.SerializationFormat.Protobuf;
+            NotifyInternal(route, msg, SerializerFactory.CreateProtobufSerializer(format), timeout);
+        }
 
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Notify(string, object, int)"/> instead.</para>
         /// </summary>
-        // public void Notify(string route, string msg)
-        // {
-        //     Notify(route, -1, msg);
-        // }
+        public void Notify(string route, string msg)
+        {
+            Notify(route, -1, msg);
+        }
 
         /// <summary>
         /// <para>DEPRECATED. Use <see cref="Notify(string, object, int)"/> instead.</para>
         /// </summary>
-        // public void Notify(string route, int timeout, string msg)
-        // {
-        //     byte[] bytes = new LegacyJsonSerializer().Encode(msg);
-        //     _binding.Notify(_client, route, bytes, timeout);
-        // }
+        public void Notify(string route, int timeout, string msg)
+        {
+            byte[] bytes = new LegacyJsonSerializer().Encode(msg);
+            SendMsg(PitayaGoToCSConstants.Notify, route, bytes);
+        }
 
-        // private void NotifyInternal(string route, object msg, IPitayaSerializer serializer, int timeout = -1)
-        // {
-        //     _binding.Notify(_client, route, serializer.Encode(msg), timeout);
-        // }
+        void NotifyInternal(string route, object msg, IPitayaSerializer serializer, int timeout = -1)
+        {
+            SendMsg(PitayaGoToCSConstants.Notify, route, serializer.Encode(msg));
+        }
 
-                /// <summary>
+        /// <summary>
         /// <para>DEPRECATED. Use <see cref="OnRoute&lt;T&gt;(string, Action&lt;T&gt;)"/> instead.</para>
         /// </summary>
         public void OnRoute(string route, Action<string> action)
