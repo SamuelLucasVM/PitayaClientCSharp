@@ -92,20 +92,22 @@ namespace Pitaya
         //     StaticPitayaBinding.SetLogFunction(fn);
         // }
 
-        public void Connect(string host, int port)
+        public void Connect(string host, int port, string handshakeOpts = null)
         {
-            InternalConnect(host, port);
+            InternalConnect(host, port, handshakeOpts);
         }
 
         public void Connect(string host, int port, Dictionary<string, string> handshakeOpts)
         {
-            InternalConnect(host, port);
-            // var opts = Pitaya.SimpleJson.SimpleJson.SerializeObject(handshakeOpts);
-            // _binding.Connect(_client, host, port, opts);
+            var opts = Pitaya.SimpleJson.SimpleJson.SerializeObject(handshakeOpts);
+            InternalConnect(host, port, opts);
         }
 
-        async Task InternalConnect (string host, int port) {
+        async Task InternalConnect (string host, int port, string handshakeOpts) {
             State = PitayaClientState.Connecting;
+            if (!string.IsNullOrEmpty(handshakeOpts)) {
+                _clientHandshake = Pitaya.SimpleJson.SimpleJson.DeserializeObject<SessionHandshakeData>(handshakeOpts);
+            }
 
             var connectTask = _client.ConnectAsync(host, port);
             if (await Task.WhenAny(connectTask, Task.Delay(_connTimeout)) == connectTask) {

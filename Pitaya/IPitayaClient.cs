@@ -12,21 +12,21 @@ namespace Pitaya
         int Quality { get; }
         PitayaClientState State { get; }
         ISerializerFactory SerializerFactory { get; set; }
-        void Connect(string host, int port);
+        void Connect(string host, int port, string handshakeOpts = null);
         void Connect(string host, int port, Dictionary<string, string> handshakeOpts);
 
-        // <summary cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)">
-        // </summary>
+        /// <summary cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)">
+        /// </summary>
         void Request<TResponse>(string route, object msg, Action<TResponse> action, Action<PitayaError> errorAction, int timeout = -1);
-
-        // <summary cref="Notify(string, object, int)">
-        // </summary>
+        
+        /// <summary cref="Notify(string, object, int)">
+        /// </summary>
         void Notify(string route, object msg, int timeout = -1);
-
-        // <summary cref="OnRoute&lt;T&gt;(string, Action&lt;T&gt;)">
-        // </summary>
+        
+        /// <summary cref="OnRoute&lt;T&gt;(string, Action&lt;T&gt;)">
+        /// </summary>
         void OnRoute<T>(string route, Action<T> action);
-
+        
         void OffRoute(string route);
         void Disconnect();
         void Dispose();
