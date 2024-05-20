@@ -19,6 +19,23 @@ namespace Pitaya.NativeImpl {
         public Dictionary<string, object> User;
     }
 
+    public static class SessionHandshakeDataFactory {
+        public static SessionHandshakeData Default() {
+            SessionHandshakeData defaultHandShakeData = new SessionHandshakeData {
+			    Sys = new HandshakeClientData {
+                    Platform = "mac",
+                    LibVersion = "0.3.5-release",
+                    BuildNumber = "20",
+                    Version = "2.1",
+			    },
+                User = new Dictionary<string, object>(),
+		    };
+            defaultHandShakeData.User["age"] = 30;
+
+            return defaultHandShakeData;
+        }
+    }
+
     public class HandshakeSys {
         public Dictionary<string, ushort> Dict;
         public int Heartbeat;
@@ -47,6 +64,6 @@ namespace Pitaya.NativeImpl {
 
     public class PendingRequest {
         public Message Msg {get; set;}
-        public DateTime SentAt { get; set; }
+        public TimeSpan SentAt { get; set; }
     }
 }
