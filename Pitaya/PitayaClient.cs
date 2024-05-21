@@ -326,6 +326,11 @@ namespace Pitaya
             handshake = serializer.Decode<HandshakeData>(handshakePacket.Data);
 
             Console.WriteLine("got handshake from sv, data: " + handshake);
+
+            if(handshake.Sys.Dict != null){
+                Utils.SetDictionary(handshake.Sys.Dict);
+            }
+
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.HandshakeAck, new byte[]{});
             await _stream.WriteAsync(p);
 

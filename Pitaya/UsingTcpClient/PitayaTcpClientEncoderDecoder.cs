@@ -218,14 +218,18 @@ namespace Pitaya.NativeImpl
                     // The line below should be the same as: code := binary.BigEndian.Uint16(data[offset:(offset + 2)])
                     ushort code = (ushort)((data[offset] << 8) | data[offset + 1]);
 
-                    //routesCodesMutex.RLock()
-                    //route, ok := codes[code]
-                    //routesCodesMutex.RUnlock()
-                    //if !ok {
-                    //    return nil, ErrRouteInfoNotFound
-                    //}
-                    //message.Route = route
-                    offset += 2;
+                    lock (RoutesCodesManager.routesCodesLock)
+                    {
+                        if (RoutesCodesManager.codes.TryGetValue(code, out string route))
+                        {
+                            message.Route = route;
+                            offset += 2;
+                        }
+                        else
+                        {
+                            throw new ErrRouteInfoNotFound();
+                        }
+                    }
                 }
                 else
                 {
@@ -242,7 +246,8 @@ namespace Pitaya.NativeImpl
                 }
             }
 
-            if (offset > size) {
+            if (offset > size)
+            {
                 throw new ErrInvalidMessage();
             }
 
