@@ -43,4 +43,20 @@ namespace Pitaya.NativeImpl {
         public ErrRouteInfoNotFound(string message) : base(message) { }
         public ErrRouteInfoNotFound(string message, Exception inner) : base(message, inner) { }
     }
+
+    public class CustomError : Exception {
+        public string Code { get; private set; }
+        public Dictionary<string, string> Metadata { get; private set; }
+
+        public CustomError(string message, string code, Dictionary<string, string> metadata = null) : base(message) {
+            Code = code;
+            Metadata = metadata ?? new Dictionary<string, string>();
+        }
+    }
+
+    public static class ErrorHelper {
+        public static CustomError Error(Exception ex, string code, Dictionary<string, string> metadata = null) {
+            return new CustomError(ex.Message, code, metadata);
+        }
+    }
 }
