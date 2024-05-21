@@ -114,7 +114,7 @@ namespace Pitaya
                 _stream = _client.GetStream();
                 HandleHandshake();
             } else {
-                Console.WriteLine(string.Format("Connect Timeout: %1", _connTimeout));
+                Console.WriteLine(string.Format("Connect Timeout: {0}", _connTimeout));
             }
         }
 
@@ -369,7 +369,13 @@ namespace Pitaya
         async Task HandleServerMessages() {
             try {
                 while (Connected) {
-                    Packet[] packets = await ReadPackets();
+                    Packet[] packets = null;
+                    try {
+                        packets = await ReadPackets();
+                    } catch (Exception e) {
+                        Console.WriteLine(string.Format("error handling server messages: ", e.ToString()));
+                        return;
+                    }
 
                     foreach (Packet p in packets) {
                         await _packetChan.Writer.WriteAsync(p);
@@ -392,9 +398,9 @@ namespace Pitaya
                 buf.Write(data, 0, n);
             }
             
-            Packet[] packets = null;
-            packets = EncoderDecoder.DecodePacket(buf.ToArray());
+            Packet[] packets = EncoderDecoder.DecodePacket(buf.ToArray());
 
+            // is this Necessarily?
             int totalProcessed = 0;
             foreach (Packet p in packets) {
                 totalProcessed += PitayaGoToCSConstants.HeadLength + p.Length;
@@ -432,11 +438,17 @@ namespace Pitaya
 
         async Task SendHeartbeats(int interval) {
             try {
-                while (true) {
+                while (Connected) {
                     byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Heartbeat, new byte[] { });
 
                     int sentAt = (int) DateTime.Now.TimeOfDay.TotalSeconds;
-                    await _stream.WriteAsync(p);
+
+                    try {
+                        await _stream.WriteAsync(p);
+                    } catch (Exception e) {
+                        Console.WriteLine(string.Format("error sending heartbeat to server: {0}", e.ToString()));
+                        return;
+                    }
 
                     byte[] data = new byte[1024];
                     await _stream.ReadAsync(data);
