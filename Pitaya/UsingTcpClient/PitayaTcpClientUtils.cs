@@ -38,7 +38,7 @@ namespace Pitaya.NativeImpl {
 
             byte[] bytes = new byte[header.Length-1];
             Array.Copy(header, 1, bytes, 0, header.Length-1);
-            int size = Utils.BytesToInt(bytes);
+            int size = BytesToInt(bytes);
 
             if (size > PitayaGoToCSConstants.MaxPacketSize) {
                 throw new ErrPacketSizeExcced();
