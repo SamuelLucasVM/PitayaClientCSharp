@@ -223,13 +223,13 @@ namespace Pitaya.NativeImpl
                         if (RoutesCodesManager.codes.TryGetValue(code, out string route))
                         {
                             message.Route = route;
-                            offset += 2;
                         }
                         else
                         {
                             throw new ErrRouteInfoNotFound();
                         }
                     }
+                    offset += 2;
                 }
                 else
                 {

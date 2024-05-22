@@ -71,14 +71,14 @@ namespace Pitaya.NativeImpl
                     string r = route.Trim();
 
                     // duplication check
-                    if (RoutesCodesManager.routes.ContainsKey(route) || RoutesCodesManager.codes.ContainsKey(code))
+                    if (RoutesCodesManager.routes.ContainsKey(r) || RoutesCodesManager.codes.ContainsKey(code))
                     {
-                        throw new Exception($"Duplicated route (route: {route}, code: {code})");
+                        throw new Exception($"Duplicated route (route: {r}, code: {code})");
                     }
 
                     // update map, using last value when key duplicated
-                    RoutesCodesManager.routes[route] = code;
-                    RoutesCodesManager.codes[code] = route;
+                    RoutesCodesManager.routes[r] = code;
+                    RoutesCodesManager.codes[code] = r;
                 }
             }
 

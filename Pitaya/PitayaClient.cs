@@ -18,7 +18,7 @@ namespace Pitaya
 
         public ISerializerFactory SerializerFactory { get; set; }
 
-        
+
         private const int DEFAULT_CONNECTION_TIMEOUT = 30;
         private TcpClient _client = null;
         private EventManager _eventManager;
@@ -35,10 +35,10 @@ namespace Pitaya
         private uint _requestTimeout;
         private int _connTimeout;
         private bool Connected;
-        
-        public PitayaClient() : this(false) {}
-        public PitayaClient(int connectionTimeout) : this(false, null, connectionTimeout: connectionTimeout) {}
-        public PitayaClient(string certificateName = null) : this(false, certificateName: certificateName) {}
+
+        public PitayaClient() : this(false) { }
+        public PitayaClient(int connectionTimeout) : this(false, null, connectionTimeout: connectionTimeout) { }
+        public PitayaClient(string certificateName = null) : this(false, certificateName: certificateName) { }
         public PitayaClient(bool enableReconnect = false, string certificateName = null, int connectionTimeout = DEFAULT_CONNECTION_TIMEOUT, IPitayaQueueDispatcher queueDispatcher = null, IPitayaBinding binding = null)
         {
             Init(certificateName, certificateName != null, false, enableReconnect, connectionTimeout, new SerializerFactory());
@@ -67,17 +67,17 @@ namespace Pitaya
 
             _pendingRequestsLock = new object();
 
-//             if (certificateName != null)
-//             {
-// #if UNITY_EDITOR
-//                 if (File.Exists(certificateName))
-//                     _binding.SetCertificatePath(certificateName);
-//                 else
-//                     _binding.SetCertificateName(certificateName);
-// #else
-//                 //_binding.SetCertificateName(certificateName);
-// #endif
-//             }
+            //             if (certificateName != null)
+            //             {
+            // #if UNITY_EDITOR
+            //                 if (File.Exists(certificateName))
+            //                     _binding.SetCertificatePath(certificateName);
+            //                 else
+            //                     _binding.SetCertificateName(certificateName);
+            // #else
+            //                 //_binding.SetCertificateName(certificateName);
+            // #endif
+            //             }
         }
 
         // public static void SetLogLevel(PitayaLogLevel level)
@@ -101,18 +101,23 @@ namespace Pitaya
             InternalConnect(host, port, opts);
         }
 
-        async Task InternalConnect (string host, int port, string handshakeOpts) {
+        async Task InternalConnect(string host, int port, string handshakeOpts)
+        {
             State = PitayaClientState.Connecting;
-            if (!string.IsNullOrEmpty(handshakeOpts)) {
+            if (!string.IsNullOrEmpty(handshakeOpts))
+            {
                 _clientHandshake = Pitaya.SimpleJson.SimpleJson.DeserializeObject<SessionHandshakeData>(handshakeOpts);
             }
 
             var connectTask = _client.ConnectAsync(host, port);
-            if (await Task.WhenAny(connectTask, Task.Delay(_connTimeout)) == connectTask) {
+            if (await Task.WhenAny(connectTask, Task.Delay(_connTimeout)) == connectTask)
+            {
                 State = PitayaClientState.Connected;
                 _stream = _client.GetStream();
                 HandleHandshake();
-            } else {
+            }
+            else
+            {
                 Console.WriteLine(string.Format("Connect Timeout: {0}", _connTimeout));
             }
         }
@@ -131,7 +136,7 @@ namespace Pitaya
         /// </summary>
         public void Request(string route, Action<string> action, Action<PitayaError> errorAction)
         {
-            Request(route, (string) null, action, errorAction);
+            Request(route, (string)null, action, errorAction);
         }
 
         /// <summary>
@@ -186,8 +191,10 @@ namespace Pitaya
             SendMsg(PitayaGoToCSConstants.Request, route, serializer.Encode(msg));
         }
 
-        async Task SendMsg(byte msgType, string route, byte[] data) {
-            Message m = new Message {
+        async Task SendMsg(byte msgType, string route, byte[] data)
+        {
+            Message m = new Message
+            {
                 Type = msgType,
                 Id = _reqUid,
                 Route = route,
@@ -196,14 +203,16 @@ namespace Pitaya
             };
 
             byte[] byteMsg = BuildPacket(m);
-            if (msgType == PitayaGoToCSConstants.Request) {
-                PendingRequest newRequest = new PendingRequest {
+            if (msgType == PitayaGoToCSConstants.Request)
+            {
+                PendingRequest newRequest = new PendingRequest
+                {
                     Msg = m,
                     SentAt = DateTime.Now.TimeOfDay,
                 };
                 _pendingRequests[m.Id] = newRequest;
             }
-            
+
             await _stream.WriteAsync(byteMsg, 0, byteMsg.Length);
         }
 
@@ -285,8 +294,10 @@ namespace Pitaya
         }
 
         // Disconnect disconnects the client
-        public void Disconnect() {
-            if (Connected) {
+        public void Disconnect()
+        {
+            if (Connected)
+            {
                 State = PitayaClientState.Disconnecting;
                 Connected = false;
                 _client.Close();
@@ -295,28 +306,33 @@ namespace Pitaya
 
         //---------------Utils to TcpClient------------------------//
 
-        byte[] BuildPacket(Message data) {
+        byte[] BuildPacket(Message data)
+        {
             byte[] encMsg = EncoderDecoder.EncodeMsg(data);
 
             return EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Data, encMsg);
         }
 
-        void HandleHandshake() {
+        void HandleHandshake()
+        {
             SendHandshakeRequest();
             HandleHandshakeResponse();
         }
 
-        async Task HandleHandshakeResponse() {
+        async Task HandleHandshakeResponse()
+        {
             Packet[] packets = await ReadPackets();
 
             Packet handshakePacket = packets[0];
-            if (handshakePacket.Type != PitayaGoToCSConstants.Handshake) {
+            if (handshakePacket.Type != PitayaGoToCSConstants.Handshake)
+            {
                 Console.WriteLine("got first packet from server that is not a handshake, aborting");
                 return;
-        	}
+            }
 
             HandshakeData handshake = new HandshakeData();
-            if (Compression.IsCompressed(handshakePacket.Data)) {
+            if (Compression.IsCompressed(handshakePacket.Data))
+            {
                 handshakePacket.Data = Compression.InflateData(handshakePacket.Data);
             }
 
@@ -325,14 +341,22 @@ namespace Pitaya
 
             Console.WriteLine("got handshake from sv, data: " + handshake);
 
-            if(handshake.Sys.Dict != null){
-                Utils.SetDictionary(handshake.Sys.Dict);
+            if (handshake.Sys.Dict != null)
+            {
+                try
+                {
+                    Utils.SetDictionary(handshake.Sys.Dict);
+                }
+                catch
+                {
+                    // Intentionally left blank to ignore any exceptions just like Go code does
+                }
             }
 
-            byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.HandshakeAck, new byte[]{});
+            byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.HandshakeAck, new byte[] { });
             await _stream.WriteAsync(p);
 
-            Connected = true;   
+            Connected = true;
 
             Thread sendHeartBeats = new Thread(() => SendHeartbeats((int)handshake.Sys.Heartbeat));
             Thread handleServerMessages = new Thread(() => HandleServerMessages());
@@ -345,15 +369,21 @@ namespace Pitaya
             pendingRequestsReaper.Start();
         }
 
-        async Task HandlePackets(){
-            while(await _packetChan.Reader.WaitToReadAsync()){
-                while(_packetChan.Reader.TryRead(out Packet packet)){
-                    switch(packet.Type) {
+        async Task HandlePackets()
+        {
+            while (await _packetChan.Reader.WaitToReadAsync())
+            {
+                while (_packetChan.Reader.TryRead(out Packet packet))
+                {
+                    switch (packet.Type)
+                    {
                         case PitayaGoToCSConstants.Data:
                             Console.WriteLine("got data: " + System.Text.Encoding.UTF8.GetString(packet.Data));
                             Message message = EncoderDecoder.DecodeMsg(packet.Data);
-                            if(message.Type == PitayaGoToCSConstants.Response){
-                                if (_pendingRequests[message.Id] != null) {
+                            if (message.Type == PitayaGoToCSConstants.Response)
+                            {
+                                if (_pendingRequests[message.Id] != null)
+                                {
                                     OnRequestResponse(message.Id, message.Data);
                                     _pendingRequests.Remove(message.Id);
                                 }
@@ -368,43 +398,55 @@ namespace Pitaya
             }
         }
 
-        async Task HandleServerMessages() {
-            try {
-                while (Connected) {
+        async Task HandleServerMessages()
+        {
+            try
+            {
+                while (Connected)
+                {
                     Packet[] packets = null;
-                    try {
+                    try
+                    {
                         packets = await ReadPackets();
-                    } catch (Exception e) {
+                    }
+                    catch (Exception e)
+                    {
                         Console.WriteLine(string.Format("error handling server messages: ", e.ToString()));
                         return;
                     }
 
-                    foreach (Packet p in packets) {
+                    foreach (Packet p in packets)
+                    {
                         await _packetChan.Writer.WriteAsync(p);
                     }
                 }
-            } finally {
+            }
+            finally
+            {
                 Disconnect();
             }
         }
 
-        async Task<Packet[]> ReadPackets() {
+        async Task<Packet[]> ReadPackets()
+        {
             // listen for sv messages
             MemoryStream buf = new MemoryStream();
 
             byte[] data = new byte[1024];
             int n = data.Length;
 
-            while (n == data.Length) {
+            while (n == data.Length)
+            {
                 n = await _stream.ReadAsync(data);
                 buf.Write(data, 0, n);
             }
-            
+
             Packet[] packets = EncoderDecoder.DecodePacket(buf.ToArray());
 
             // is this Necessarily?
             int totalProcessed = 0;
-            foreach (Packet p in packets) {
+            foreach (Packet p in packets)
+            {
                 totalProcessed += PitayaGoToCSConstants.HeadLength + p.Length;
             }
             Utils.NextMemoryStream(ref buf, totalProcessed);
@@ -412,66 +454,81 @@ namespace Pitaya
             return packets;
         }
 
-        
-        // pendingRequestsReaper delete timedout requests
-        async Task PendingRequestsReaper() {
-            while (Connected) {
-                    List<PendingRequest> toDelete = new List<PendingRequest>();
-                    lock (_pendingRequestsLock)
-                    {
-                        foreach (PendingRequest v in _pendingRequests.Values) {
-                            if ((uint)(DateTime.Now.TimeOfDay.TotalSeconds - v.SentAt.TotalSeconds) > _requestTimeout) {
-                                toDelete.Add(v);
-                            }
-                        }
 
-                        foreach (PendingRequest pendingReq in toDelete) {
-                            CustomError err = ErrorHelper.Error(new Exception("request timeout"), "PIT-504");
-                            byte[] errSerialized = Encoding.UTF8.GetBytes(Pitaya.SimpleJson.SimpleJson.SerializeObject(err));
-                            // send a timeout to incoming msg chan
-                            Message m = new Message {
-                                Type = PitayaGoToCSConstants.Response,
-                                Id = pendingReq.Msg.Id,
-                                Route = pendingReq.Msg.Route,
-                                Data = errSerialized,
-                                Err = true,
-                            };
-                            _pendingRequests.Remove(m.Id);
+        // pendingRequestsReaper delete timedout requests
+        async Task PendingRequestsReaper()
+        {
+            while (Connected)
+            {
+                List<PendingRequest> toDelete = new List<PendingRequest>();
+                lock (_pendingRequestsLock)
+                {
+                    foreach (PendingRequest v in _pendingRequests.Values)
+                    {
+                        if ((uint)(DateTime.Now.TimeOfDay.TotalSeconds - v.SentAt.TotalSeconds) > _requestTimeout)
+                        {
+                            toDelete.Add(v);
                         }
                     }
 
-                    await Task.Delay(1000);
+                    foreach (PendingRequest pendingReq in toDelete)
+                    {
+                        CustomError err = ErrorHelper.Error(new Exception("request timeout"), "PIT-504");
+                        byte[] errSerialized = Encoding.UTF8.GetBytes(Pitaya.SimpleJson.SimpleJson.SerializeObject(err));
+                        // send a timeout to incoming msg chan
+                        Message m = new Message
+                        {
+                            Type = PitayaGoToCSConstants.Response,
+                            Id = pendingReq.Msg.Id,
+                            Route = pendingReq.Msg.Route,
+                            Data = errSerialized,
+                            Err = true,
+                        };
+                        _pendingRequests.Remove(m.Id);
+                    }
+                }
+
+                await Task.Delay(1000);
             }
         }
 
-        async Task SendHeartbeats(int interval) {
-            try {
-                while (Connected) {
+        async Task SendHeartbeats(int interval)
+        {
+            try
+            {
+                while (Connected)
+                {
                     byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Heartbeat, new byte[] { });
 
-                    int sentAt = (int) DateTime.Now.TimeOfDay.TotalSeconds;
+                    int sentAt = (int)DateTime.Now.TimeOfDay.TotalSeconds;
 
-                    try {
+                    try
+                    {
                         await _stream.WriteAsync(p);
-                    } catch (Exception e) {
+                    }
+                    catch (Exception e)
+                    {
                         Console.WriteLine(string.Format("error sending heartbeat to server: {0}", e.ToString()));
                         return;
                     }
 
                     byte[] data = new byte[1024];
                     await _stream.ReadAsync(data);
-                    int receivedAt = (int) DateTime.Now.TimeOfDay.TotalSeconds;
+                    int receivedAt = (int)DateTime.Now.TimeOfDay.TotalSeconds;
 
                     Quality = sentAt - receivedAt;
 
                     await Task.Delay(interval * 1000);
                 }
-            } finally {
+            }
+            finally
+            {
                 Disconnect();
             }
         }
 
-        async Task SendHandshakeRequest() {
+        async Task SendHandshakeRequest()
+        {
             string enc = Pitaya.SimpleJson.SimpleJson.SerializeObject(_clientHandshake);
             byte[] encBytes = Encoding.UTF8.GetBytes(enc);
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Handshake, encBytes);
