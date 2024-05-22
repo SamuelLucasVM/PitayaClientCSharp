@@ -379,13 +379,26 @@ namespace Pitaya
                     {
                         case PitayaGoToCSConstants.Data:
                             Console.WriteLine("got data: " + System.Text.Encoding.UTF8.GetString(packet.Data));
-                            Message message = EncoderDecoder.DecodeMsg(packet.Data);
+
+                            Message message;
+                            try
+                            {
+                                message = EncoderDecoder.DecodeMsg(packet.Data);
+                            }
+                            catch (Exception ex)
+                            {
+                                throw new Exception($"error decoding msg from sv: {ex.Message}");
+                            }
+
                             if (message.Type == PitayaGoToCSConstants.Response)
                             {
-                                if (_pendingRequests[message.Id] != null)
+                                lock (_pendingRequestsLock)
                                 {
-                                    OnRequestResponse(message.Id, message.Data);
-                                    _pendingRequests.Remove(message.Id);
+                                    if (_pendingRequests[message.Id] != null)
+                                    {
+                                        OnRequestResponse(message.Id, message.Data);
+                                        _pendingRequests.Remove(message.Id);
+                                    }
                                 }
                             }
                             break;
