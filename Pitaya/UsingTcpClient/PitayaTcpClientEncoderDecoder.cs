@@ -61,14 +61,12 @@ namespace Pitaya.NativeImpl
         {
             if (typ < PitayaGoToCSConstants.Handshake || typ > PitayaGoToCSConstants.Kick)
             {
-                return null;
-                // return nil, packet.ErrWrongPomeloPacketType
+                throw new ErrWrongPomeloPacketType();
             }
 
             if (data.Length > PitayaGoToCSConstants.MaxPacketSize)
             {
-                return null;
-                // return nil, ErrPacketSizeExcced
+                throw new ErrPacketSizeExcced();
             }
 
             Packet p = new Packet() { Type = typ, Length = data.Length };
@@ -100,16 +98,17 @@ namespace Pitaya.NativeImpl
             List<byte> buf = new List<byte>();
             byte flag = (byte)(message.Type << 1);
 
-            // routesCodesMutex.RLock()
-            // code, compressed := routes[message.Route]
-            // routesCodesMutex.RUnlock()
-            // if compressed {
-            //     flag |= msgRouteCompressMask
-            // }
+            ushort code;
+            lock(RoutesCodesManager.routesCodesLock){
+                if(RoutesCodesManager.routes.TryGetValue(message.Route, out ushort c)){
+                    code = c;
+                    flag |= PitayaGoToCSConstants.msgRouteCompressMask;
+                }
+            }
 
-            // if message.Err {
-            //     flag |= errorMask
-            // }
+            if (message.Err) {
+                flag |= PitayaGoToCSConstants.errorMask;
+            }
 
             buf.Add(flag);
 
