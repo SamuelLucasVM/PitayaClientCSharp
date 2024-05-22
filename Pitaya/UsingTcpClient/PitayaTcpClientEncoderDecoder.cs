@@ -61,14 +61,12 @@ namespace Pitaya.NativeImpl
         {
             if (typ < PitayaGoToCSConstants.Handshake || typ > PitayaGoToCSConstants.Kick)
             {
-                return null;
-                // return nil, packet.ErrWrongPomeloPacketType
+                throw new ErrWrongPomeloPacketType();
             }
 
             if (data.Length > PitayaGoToCSConstants.MaxPacketSize)
             {
-                return null;
-                // return nil, ErrPacketSizeExcced
+                throw new ErrPacketSizeExcced();
             }
 
             Packet p = new Packet() { Type = typ, Length = data.Length };
@@ -80,13 +78,6 @@ namespace Pitaya.NativeImpl
             Array.Copy(source, 0, buf, 1, PitayaGoToCSConstants.HeadLength - 1);
 
             Array.Copy(data, 0, buf, PitayaGoToCSConstants.HeadLength, data.Length);
-
-
-            // Array.Copy(IntToBytes(p.Length), 0, buf, 1, PitayaGoToCSConstants.HeadLength);
-            // Array.Copy(data, 0, buf, PitayaGoToCSConstants.HeadLength, data.Length);
-
-            // copy(buf[1:HeadLength], IntToBytes(p.Length))
-            // copy(buf[HeadLength:], data)
 
             return buf;
         }
