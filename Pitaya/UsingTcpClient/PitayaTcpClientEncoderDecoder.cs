@@ -93,10 +93,9 @@ namespace Pitaya.NativeImpl
 
             bool compressed = false;
 
-            ushort code = 0;
+            ushort code;
             lock(RoutesCodesManager.routesCodesLock){
-                if(RoutesCodesManager.routes.TryGetValue(message.Route, out ushort c)){
-                    code = c;
+                if(RoutesCodesManager.routes.TryGetValue(message.Route, out code)){
                     compressed = true;
                 }
             }
