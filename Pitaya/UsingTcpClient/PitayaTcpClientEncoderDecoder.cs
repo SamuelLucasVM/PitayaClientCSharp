@@ -84,19 +84,25 @@ namespace Pitaya.NativeImpl
 
         public static byte[] EncodeMsg(Message message)
         {
-            // if InvalidType(message.Type) {
-            //     return nil, ErrWrongMessageType
-            // }
+            if (InvalidType(message.Type)) {
+                throw new ErrWrongMessageType();
+            }
 
             List<byte> buf = new List<byte>();
             byte flag = (byte)(message.Type << 1);
 
-            ushort code;
+            bool compressed = false;
+
+            ushort code = 0;
             lock(RoutesCodesManager.routesCodesLock){
                 if(RoutesCodesManager.routes.TryGetValue(message.Route, out ushort c)){
                     code = c;
-                    flag |= PitayaGoToCSConstants.msgRouteCompressMask;
+                    compressed = true;
                 }
+            }
+
+            if (compressed) {
+                flag |= PitayaGoToCSConstants.msgRouteCompressMask;
             }
 
             if (message.Err) {
@@ -105,7 +111,7 @@ namespace Pitaya.NativeImpl
 
             buf.Add(flag);
 
-            if (message.Type == PitayaGoToCSConstants.Request)
+            if (message.Type == PitayaGoToCSConstants.Request || message.Type == PitayaGoToCSConstants.Response)
             {
                 ulong n = message.Id;
                 byte b;
@@ -126,25 +132,16 @@ namespace Pitaya.NativeImpl
                 }
             }
 
-            if (message.Type == PitayaGoToCSConstants.Request || message.Type == PitayaGoToCSConstants.Notify || message.Type == PitayaGoToCSConstants.Push)
+            if (Routable(message.Type))
             {
-                buf.Add((byte)message.Route.Length);
-                buf.AddRange(System.Text.Encoding.UTF8.GetBytes(message.Route));
+                if (compressed) {
+                    buf.Add((byte)((code>>8)&0xFF));
+                    buf.Add((byte)(code&0xFF));
+                } else {
+                    buf.Add((byte)message.Route.Length);
+                    buf.AddRange(System.Text.Encoding.UTF8.GetBytes(message.Route));
+                }
             }
-
-            // if (DataCompression) {
-            //TODO 
-
-            // d, err := compression.De flateData(message.Data)
-            // if err != nil {
-            //     return nil, err
-            // }
-
-            // if len(d) < len(message.Data) {
-            //     message.Data = d
-            //     buf[0] |= gzipMask
-            // }
-            // }
 
             buf.AddRange(message.Data);
             return buf.ToArray();
@@ -253,6 +250,14 @@ namespace Pitaya.NativeImpl
             }
 
             return message;
+        }
+
+        static bool InvalidType(byte t) {
+            return t < PitayaGoToCSConstants.Request || t > PitayaGoToCSConstants.Push;
+        }
+
+        static bool Routable(byte t) {
+            return t == PitayaGoToCSConstants.Request || t == PitayaGoToCSConstants.Notify || t == PitayaGoToCSConstants.Push;
         }
     }
 
