@@ -12,7 +12,7 @@ using System.Threading.Channels;
 
 namespace Pitaya
 {
-    public class PitayaClient : IPitayaClient, IPitayaListener //IDisposable
+    public class PitayaClient : IDisposable, IPitayaClient, IPitayaListener
     {
         public event Action<PitayaNetWorkState, NetworkError> NetWorkStateChangedEvent;
 
@@ -58,14 +58,13 @@ namespace Pitaya
             _clientHandshake = SessionHandshakeDataFactory.Default();
 
             _packetChan = Channel.CreateUnbounded<Packet>();
-
             State = PitayaClientState.Inited;
-            _pendingRequests = new Dictionary<uint, PendingRequest>();
-            _requestTimeout = 5000; // 5 seconds
-            _connTimeout = connTimeout;
             Quality = 0;
-
+            _pendingRequests = new Dictionary<uint, PendingRequest>();
             _pendingRequestsLock = new object();
+            _requestTimeout = 5; // 5 seconds
+            _connTimeout = connTimeout;
+
 
             //             if (certificateName != null)
             //             {
@@ -114,11 +113,16 @@ namespace Pitaya
             {
                 State = PitayaClientState.Connected;
                 _stream = _client.GetStream();
-                HandleHandshake();
+                try {
+                    HandleHandshake();
+                } catch (Exception e) {
+                    Console.WriteLine(string.Format("error handling handshake: {0}", e.Message));
+                    Disconnect();
+                }
             }
             else
             {
-                Console.WriteLine(string.Format("Connect Timeout: {0}", _connTimeout));
+                Console.WriteLine(string.Format("connect timeout: {0}", _connTimeout));
             }
         }
 
@@ -205,12 +209,16 @@ namespace Pitaya
             byte[] byteMsg = BuildPacket(m);
             if (msgType == PitayaGoToCSConstants.Request)
             {
-                PendingRequest newRequest = new PendingRequest
-                {
-                    Msg = m,
-                    SentAt = DateTime.Now.TimeOfDay,
-                };
-                _pendingRequests[m.Id] = newRequest;
+                lock (_pendingRequestsLock) {
+                    if (!_pendingRequests.ContainsKey(m.Id)) {
+                        PendingRequest newRequest = new PendingRequest
+                        {
+                            Msg = m,
+                            SentAt = DateTime.Now.TimeOfDay,
+                        };
+                        _pendingRequests[m.Id] = newRequest;
+                    } 
+                }
             }
 
             await _stream.WriteAsync(byteMsg, 0, byteMsg.Length);
@@ -424,7 +432,7 @@ namespace Pitaya
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(string.Format("error handling server messages: ", e.ToString()));
+                        Console.WriteLine(string.Format("error handling server messages: {0}", e.Message));
                         return;
                     }
 
@@ -521,7 +529,7 @@ namespace Pitaya
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(string.Format("error sending heartbeat to server: {0}", e.ToString()));
+                        Console.WriteLine(string.Format("error sending heartbeat to server: {0}", e.Message));
                         return;
                     }
 

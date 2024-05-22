@@ -79,13 +79,6 @@ namespace Pitaya.NativeImpl
 
             Array.Copy(data, 0, buf, PitayaGoToCSConstants.HeadLength, data.Length);
 
-
-            // Array.Copy(IntToBytes(p.Length), 0, buf, 1, PitayaGoToCSConstants.HeadLength);
-            // Array.Copy(data, 0, buf, PitayaGoToCSConstants.HeadLength, data.Length);
-
-            // copy(buf[1:HeadLength], IntToBytes(p.Length))
-            // copy(buf[HeadLength:], data)
-
             return buf;
         }
 
