@@ -93,10 +93,9 @@ namespace Pitaya.NativeImpl
 
             bool compressed = false;
 
-            ushort code = 0;
+            ushort code;
             lock(RoutesCodesManager.routesCodesLock){
-                if(RoutesCodesManager.routes.TryGetValue(message.Route, out ushort c)){
-                    code = c;
+                if(RoutesCodesManager.routes.TryGetValue(message.Route, out code)){
                     compressed = true;
                 }
             }
@@ -161,8 +160,7 @@ namespace Pitaya.NativeImpl
             // it's a cast to Type in golang
             message.Type = (byte)((flag >> 1) & PitayaGoToCSConstants.msgTypeMask);
 
-            // Func invalidType
-            if (message.Type < PitayaGoToCSConstants.Request || message.Type > PitayaGoToCSConstants.Push)
+            if (InvalidType(message.Type))
             {
                 throw new ErrWrongMessageType();
             }
@@ -192,8 +190,7 @@ namespace Pitaya.NativeImpl
 
             int size = data.Length;
 
-            //func routable
-            if (message.Type == PitayaGoToCSConstants.Request || message.Type == PitayaGoToCSConstants.Notify || message.Type == PitayaGoToCSConstants.Push)
+            if (Routable(message.Type))
             {
                 if ((flag & PitayaGoToCSConstants.msgRouteCompressMask) == 1)
                 {

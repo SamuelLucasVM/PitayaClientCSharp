@@ -243,15 +243,17 @@ namespace Pitaya
             byte[] byteMsg = BuildPacket(m);
             if (msgType == PitayaGoToCSConstants.Request)
             {
-                lock (_pendingRequestsLock) {
-                    if (!_pendingRequests.ContainsKey(m.Id)) {
+                lock (_pendingRequestsLock)
+                {
+                    if (!_pendingRequests.ContainsKey(m.Id))
+                    {
                         PendingRequest newRequest = new PendingRequest
                         {
                             Msg = m,
                             SentAt = DateTime.Now.TimeOfDay,
                         };
                         _pendingRequests[m.Id] = newRequest;
-                    } 
+                    }
                 }
             }
 
@@ -427,9 +429,10 @@ namespace Pitaya
                             {
                                 message = EncoderDecoder.DecodeMsg(packet.Data);
                             }
-                            catch (Exception ex)
+                            catch (Exception e)
                             {
-                                throw new Exception($"error decoding msg from sv: {ex.Message}");
+                                Console.WriteLine($"error decoding msg from sv: {e.Message}");
+                                break;
                             }
 
                             if (message.Type == PitayaGoToCSConstants.Response)
@@ -459,7 +462,7 @@ namespace Pitaya
             {
                 while (Connected)
                 {
-                    Packet[] packets = null;
+                    Packet[] packets = {};
                     try
                     {
                         packets = await ReadPackets();
@@ -467,7 +470,7 @@ namespace Pitaya
                     catch (Exception e)
                     {
                         Console.WriteLine(string.Format("error handling server messages: {0}", e.Message));
-                        return;
+                        break;
                     }
 
                     foreach (Packet p in packets)
@@ -496,8 +499,15 @@ namespace Pitaya
                 buf.Write(data, 0, n);
             }
 
-            Packet[] packets = EncoderDecoder.DecodePacket(buf.ToArray());
-
+            Packet[] packets = {};
+            try
+            {
+                packets = EncoderDecoder.DecodePacket(buf.ToArray());
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(string.Format("error decoding packet from server: {0}", e.Message));
+            }
             // is this Necessarily?
             int totalProcessed = 0;
             foreach (Packet p in packets)
