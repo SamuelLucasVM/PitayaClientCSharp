@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 using System.Text;
 
 namespace Pitaya.NativeImpl
@@ -8,9 +9,13 @@ namespace Pitaya.NativeImpl
     // HandshakeClientData represents information about the client sent on the handshake.
     public class HandshakeClientData
     {
+        [JsonProperty(PropertyName = "platform")]
         public string Platform;
+        [JsonProperty(PropertyName = "libVersion")]
         public string LibVersion;
+        [JsonProperty(PropertyName = "clientBuildNumber")]
         public string BuildNumber;
+        [JsonProperty(PropertyName = "clientVersion")]
         public string Version;
     }
 
@@ -19,8 +24,10 @@ namespace Pitaya.NativeImpl
     // that depends on the app and is customized by the user.
     public class SessionHandshakeData
     {
-        public HandshakeClientData Sys;
-        public Dictionary<string, object> User;
+        [JsonProperty(PropertyName = "sys")]
+        public HandshakeClientData Sys { get; set; }
+        [JsonProperty(PropertyName = "user")]
+        public Dictionary<string, object> User { get; set; }
     }
 
     public static class SessionHandshakeDataFactory

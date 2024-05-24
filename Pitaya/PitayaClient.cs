@@ -33,7 +33,7 @@ namespace Pitaya
         public int Quality { get; private set; }
         public static PitayaGoToCSConstants.LogLevel DefaultLogLevel { get; private set; } = PitayaGoToCSConstants.LogLevel.Debug;
         private PitayaLogger logger;
-        private static NetworkStream _stream;
+        private static Stream _stream;
         private SessionHandshakeData _clientHandshake;
         private Channel<Packet> _packetChan;
         private Dictionary<uint, PendingRequest> _pendingRequests;
@@ -41,6 +41,9 @@ namespace Pitaya
         private uint _requestTimeout;
         private int _connTimeout;
         private bool Connected;
+        private bool _enableTls;
+        private string _certificateName;
+        private bool _enableReconnect;
 
         public PitayaClient() : this(false) { }
         public PitayaClient(int connectionTimeout) : this(false, null, connectionTimeout: connectionTimeout) { }
@@ -72,6 +75,9 @@ namespace Pitaya
             _pendingRequestsLock = new object();
             _requestTimeout = 5000; // 5 seconds
             _connTimeout = connTimeout;
+            _enableTls = enableTlS;
+            _certificateName = certificateName;
+            _enableReconnect = enableReconnect;
 
 
             //             if (certificateName != null)
@@ -154,33 +160,58 @@ namespace Pitaya
             InternalConnect(host, port, opts);
         }
 
+    // if (_enableTls) {
+    //                         SslStream sslStream = new SslStream(
+    //                             _stream,
+    //                             false,
+    //                             new RemoteCertificateValidationCallback (Utils.ValidateServerCertificate),
+    //                             null
+    //                         );
+    //                         X509Certificate2 cert = new X509Certificate2(_certificateName);
+    //                         X509CertificateCollection certs = new X509CertificateCollection();
+    //                         certs.Add(cert);
+
+    //                         await sslStream.AuthenticateAsClientAsync(host, certs, true);
+    //                         _stream = sslStream;
+    //                     }
+
         async Task InternalConnect(string host, int port, string handshakeOpts)
         {
             State = PitayaClientState.Connecting;
             if (!string.IsNullOrEmpty(handshakeOpts))
             {
-                _clientHandshake = Pitaya.SimpleJson.SimpleJson.DeserializeObject<SessionHandshakeData>(handshakeOpts);
+                IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
+                _clientHandshake = serializer.Decode<SessionHandshakeData>(Encoding.UTF8.GetBytes(handshakeOpts));
             }
 
-            var connectTask = _client.ConnectAsync(host, port);
-            if (await Task.WhenAny(connectTask, Task.Delay(_connTimeout)) == connectTask)
-            {
-                State = PitayaClientState.Connected;
-                _stream = _client.GetStream();
-                try
-                {
-                    await HandleHandshake();
+            do {
+                try {
+                    await _client.ConnectAsync(host, port).WaitAsync(TimeSpan.FromSeconds(_connTimeout));
+
+                    State = PitayaClientState.Connected;
+                    _stream = _client.GetStream();
+                    try {
+                        await HandleHandshake();
+                        return;
+                    } catch (Exception e) {
+                        Disconnect();
+                        if (_enableReconnect) {
+                            logger.Error("error handling handshake: {0}, will reconn", e.Message);
+                        } else {
+                            logger.Error("error handling handshake: {0}", e.Message);
+                        }
+                    }
                 }
-                catch (Exception e)
-                {
-                    logger.Error("error handling handshake: " + e.Message);
+                catch (Exception e) {
                     Disconnect();
+                    if (_enableReconnect) {
+                        logger.Error("error handling handshake: {0}, will reconn", e.Message);
+                        await Task.Delay(2000);
+                    }else {
+                        logger.Error("error handling handshake: {0}", e.Message);
+                    }
                 }
-            }
-            else
-            {
-                logger.Warn(string.Format("Connect Timeout: {0}", _connTimeout));
-            }
+            } while (_enableReconnect);
         }
 
         /// <summary cref="Request&lt;TResponse&gt;(string, object, Action&lt;TResponse&gt;, Action&lt;PitayaError&gt;, int)">
@@ -361,7 +392,7 @@ namespace Pitaya
             {
                 State = PitayaClientState.Disconnecting;
                 Connected = false;
-                _client.Close();
+                _stream.Close();
             }
         }
 
@@ -604,8 +635,8 @@ namespace Pitaya
 
         async Task SendHandshakeRequest()
         {
-            string enc = Pitaya.SimpleJson.SimpleJson.SerializeObject(_clientHandshake);
-            byte[] encBytes = Encoding.UTF8.GetBytes(enc);
+            IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
+            byte[] encBytes = serializer.Encode(_clientHandshake);
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Handshake, encBytes);
 
             await _stream.WriteAsync(p, 0, p.Length);
