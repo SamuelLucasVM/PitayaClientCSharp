@@ -207,7 +207,7 @@ namespace Pitaya
                     }
 
                     try {
-                        await await HandleHandshake();
+                        await HandleHandshake();
                         return;
                     } catch (Exception e) {
                         Disconnect();
