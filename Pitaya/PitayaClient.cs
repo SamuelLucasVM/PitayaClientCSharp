@@ -18,9 +18,13 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
 
+#if UNITY_EDITOR
+using UnityEngine;
+#endif
+
 namespace Pitaya
 {
-    public class PitayaClient : IDisposable, IPitayaClient, IPitayaListener
+    public class PitayaClient : IPitayaClient, IPitayaListener //IDisposable
     {
         public event Action<PitayaNetWorkState, NetworkError> NetWorkStateChangedEvent;
 
@@ -35,6 +39,8 @@ namespace Pitaya
 
         public PitayaClientState State { get; private set; } = PitayaClientState.Unknown;
         public int Quality { get; private set; }
+        public static PitayaGoToCSConstants.LogLevel DefaultLogLevel { get; private set; } = PitayaGoToCSConstants.LogLevel.Debug;
+        private PitayaLogger logger;
         private static Stream _stream;
         private object _readLock;
         private object _writeLock;
@@ -64,6 +70,8 @@ namespace Pitaya
 
         private void Init(string certificateName, bool enableTlS, bool enablePolling, bool enableReconnect, int connTimeout, ISerializerFactory serializerFactory)
         {
+            SetLogFunction(DefaultLog);
+
             SerializerFactory = serializerFactory;
             _eventManager = new EventManager();
             _client = new TcpClient();
@@ -78,7 +86,7 @@ namespace Pitaya
             Quality = 0;
             _pendingRequests = new Dictionary<uint, PendingRequest>();
             _pendingRequestsLock = new object();
-            _requestTimeout = 5; // 5 seconds
+            _requestTimeout = 5000; // 5 seconds
             _connTimeout = connTimeout;
             _enableTls = enableTlS;
             _certificateName = certificateName;
@@ -98,15 +106,61 @@ namespace Pitaya
             //             }
         }
 
-        // public static void SetLogLevel(PitayaLogLevel level)
-        // {
-        //     StaticPitayaBinding.SetLogLevel(level);
-        // }
+        private void DefaultLog(PitayaGoToCSConstants.LogLevel level, string message, params object[] args)
+        {
+#if UNITY_EDITOR
+                switch (level)
+            {
+                case PitayaGoToCSConstants.LogLevel.Debug:
+                    Debug.Log("[DEBUG] " + message);
+                    break;
+                case PitayaGoToCSConstants.LogLevel.Info:
+                    Debug.Log("[INFO] " + message);
+                    break;
+                case PitayaGoToCSConstants.LogLevel.Warn:
+                    Debug.LogWarning("[WARN] " + message);
+                    break;
+                case PitayaGoToCSConstants.LogLevel.Error:
+                    Debug.LogError("[ERROR] " + message);
+                    break;
+            }
+#else
+            switch (level)
+            {
+                case PitayaGoToCSConstants.LogLevel.Debug:
+                    Console.Write("[DEBUG] ");
+                    break;
+                case PitayaGoToCSConstants.LogLevel.Info:
+                    Console.Write("[INFO] ");
+                    break;
+                case PitayaGoToCSConstants.LogLevel.Warn:
+                    Console.Write("[WARN] ");
+                    break;
+                case PitayaGoToCSConstants.LogLevel.Error:
+                    Console.Write("[ERROR] ");
+                    break;
+            }
 
-        // public static void SetLogFunction(NativeLogFunction fn)
-        // {
-        //     StaticPitayaBinding.SetLogFunction(fn);
-        // }
+            Console.WriteLine(string.Format(message, args));
+#endif
+        }
+
+        public static void SetLogLevel(PitayaGoToCSConstants.LogLevel level)
+        {
+            DefaultLogLevel = level;
+        }
+
+        public void SetLogFunction(LogFunction fn)
+        {
+            try
+            {
+                logger = new PitayaLogger(fn);
+            }
+            catch (ArgumentNullException e)
+            {
+                throw new Exception("Cannot initialize log function");
+            }
+        }
 
         public void Connect(string host, int port, string handshakeOpts = null)
         {
@@ -153,27 +207,27 @@ namespace Pitaya
                     }
 
                     try {
-                        await HandleHandshake();
+                        await await HandleHandshake();
                         return;
                     } catch (Exception e) {
                         Disconnect();
                         if (_enableReconnect) {
-                            Console.WriteLine(string.Format("error handling handshake: {0}, will reconn", e.ToString()));
+                            logger.Error(string.Format("error handling handshake: {0}, will reconn", e.ToString()));
                             _client = new TcpClient();
                             await Task.Delay(2000);
                         } else {
-                            Console.WriteLine(string.Format("error handling handshake: {0}", e.ToString()));
+                            logger.Error(string.Format("error handling handshake: {0}", e.ToString()));
                         }
                     }
                 }
                 catch (Exception e) {
                     Disconnect();
                     if (_enableReconnect) {
-                        Console.WriteLine(string.Format("error connecting: {0}, will reconn", e.ToString()));
+                        logger.Error(string.Format("error handling handshake: {0}, will reconn", e.ToString()));
                         _client = new TcpClient();
                         await Task.Delay(2000);
                     }else {
-                        Console.WriteLine(string.Format("error connecting: {0}", e.ToString()));
+                        logger.Error(string.Format("error handling handshake: {0}", e.ToString()));
                     }
                 }
             } while (_enableReconnect);
@@ -392,7 +446,7 @@ namespace Pitaya
             Packet handshakePacket = packets[0];
             if (handshakePacket.Type != PitayaGoToCSConstants.Handshake)
             {
-                Console.WriteLine("got first packet from server that is not a handshake, aborting");
+                logger.Error("got first packet from server that is not a handshake, aborting");
                 return;
             }
 
@@ -405,7 +459,7 @@ namespace Pitaya
             IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
             handshake = serializer.Decode<HandshakeData>(handshakePacket.Data);
 
-            Console.WriteLine("got handshake from sv, data: " + handshake);
+            logger.Debug("got handshake from sv, data: " + handshake);
 
             if (handshake.Sys.Dict != null)
             {
@@ -426,15 +480,10 @@ namespace Pitaya
 
             Connected = true;
 
-            Thread sendHeartBeats = new Thread(() => SendHeartbeats((int)handshake.Sys.Heartbeat));
-            Thread handleServerMessages = new Thread(() => HandleServerMessages());
-            Thread handlePackets = new Thread(() => HandlePackets());
-            Thread pendingRequestsReaper = new Thread(() => PendingRequestsReaper());
-
-            sendHeartBeats.Start();
-            handleServerMessages.Start();
-            handlePackets.Start();
-            pendingRequestsReaper.Start();
+            Task sendHeartbeats = Task.Run(() => SendHeartbeats((int)handshake.Sys.Heartbeat));
+            Task handleServerMessages = Task.Run(() => HandleServerMessages());
+            Task handlePackets = Task.Run(() => HandlePackets());
+            Task pendingRequestsReaper = Task.Run(() => PendingRequestsReaper());
         }
 
         async Task HandlePackets()
@@ -446,7 +495,7 @@ namespace Pitaya
                     switch (packet.Type)
                     {
                         case PitayaGoToCSConstants.Data:
-                            Console.WriteLine("got data: " + System.Text.Encoding.UTF8.GetString(packet.Data));
+                            logger.Debug("got data: {0}", System.Text.Encoding.UTF8.GetString(packet.Data));
 
                             Message message;
                             try
@@ -455,24 +504,21 @@ namespace Pitaya
                             }
                             catch (Exception e)
                             {
-                                Console.WriteLine($"error decoding msg from sv: {e.Message}");
+                                logger.Error("error decoding msg from sv: {0}", e.Message);
                                 break;
                             }
 
                             if (message.Type == PitayaGoToCSConstants.Response)
                             {
-                                lock (_pendingRequestsLock)
+                                if (_pendingRequests[message.Id] != null)
                                 {
-                                    if (_pendingRequests[message.Id] != null)
-                                    {
-                                        OnRequestResponse(message.Id, message.Data);
-                                        _pendingRequests.Remove(message.Id);
-                                    }
+                                    OnRequestResponse(message.Id, message.Data);
+                                    _pendingRequests.Remove(message.Id);
                                 }
                             }
                             break;
                         case PitayaGoToCSConstants.Kick:
-                            Console.WriteLine("got kick packet from the server! disconnecting...");
+                            logger.Warn("got kick packet from the server! disconnecting...");
                             Disconnect();
                             break;
                     }
@@ -486,15 +532,15 @@ namespace Pitaya
             {
                 while (Connected)
                 {
-                    Packet[] packets = {};
+                    Packet[] packets = null;
                     try
                     {
                         packets = await ReadPackets();
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(string.Format("error handling server messages: {0}", e.ToString()));
-                        return;
+                        logger.Error(string.Format("error handling server messages: {0}", e.ToString()));
+                        break;
                     }
 
                     foreach (Packet p in packets)
@@ -525,15 +571,16 @@ namespace Pitaya
                 }
             }
 
-            Packet[] packets = {};
+            Packet[] packets = { };
             try
             {
                 packets = EncoderDecoder.DecodePacket(buf.ToArray());
             }
             catch (Exception e)
             {
-                Console.WriteLine(string.Format("error decoding packet from server: {0}", e.ToString()));
+                logger.Error(string.Format("error decoding packet from server: {0}", e.ToString()));
             }
+
             // is this Necessarily?
             int totalProcessed = 0;
             foreach (Packet p in packets)
@@ -600,7 +647,7 @@ namespace Pitaya
                         }
                         catch (Exception e)
                         {
-                            Console.WriteLine(string.Format("error sending heartbeat to server: {0}", e.ToString()));
+                            logger.Error(string.Format("error sending heartbeat to server: {0}", e.ToString()));
                             return;
                         }
                     }
@@ -670,7 +717,7 @@ namespace Pitaya
 
         public void Dispose()
         {
-            Console.WriteLine(string.Format("PitayaClient Disposed {0}", _client));
+            logger.Debug("PitayaClient Disposed {0}", _client);
             if (_disposed)
                 return;
 

@@ -27,5 +27,18 @@ namespace Pitaya.NativeImpl
         public const byte msgTypeMask = 0x07;
         public const byte msgRouteLengthMask = 0xFF;
         public const byte msgHeadLength = 0x02;
+
+        // Log Levels
+
+        public enum LogLevel
+        {
+            Debug = 0,
+            Info = 1,
+            Warn = 2,
+            Error = 3,
+            Disable = 4
+        }
+
+        
     }
 }

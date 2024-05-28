@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using System.Text;
 
 namespace Pitaya.NativeImpl
 {
@@ -92,4 +93,67 @@ namespace Pitaya.NativeImpl
         public static readonly Dictionary<string, ushort> routes = new Dictionary<string, ushort>();
         public static readonly Dictionary<ushort, string> codes = new Dictionary<ushort, string>();
     }
+
+    public delegate void LogFunction(PitayaGoToCSConstants.LogLevel level, string message, params object[] args);
+
+    public interface ILogger
+    {
+        void Debug(string message, params object[] args);
+        void Info(string message, params object[] args);
+        void Warn(string message, params object[] args);
+        void Error(string message, params object[] args);
+    }
+    public class PitayaLogger : ILogger
+    {
+        private LogFunction _logFunction;
+
+        public PitayaLogger(LogFunction newLogFunction)
+        {
+            _logFunction = newLogFunction ?? throw new ArgumentNullException(nameof(newLogFunction));
+        }
+
+        public void Debug(string message, params object[] args)
+        {
+            Log(PitayaGoToCSConstants.LogLevel.Debug, message, args);
+        }
+
+        public void Info(string message, params object[] args)
+        {
+            Log(PitayaGoToCSConstants.LogLevel.Info, message, args);
+        }
+
+        public void Warn(string message, params object[] args)
+        {
+            Log(PitayaGoToCSConstants.LogLevel.Warn, message, args);
+        }
+
+        public void Error(string message, params object[] args)
+        {
+            Log(PitayaGoToCSConstants.LogLevel.Error, message, args);
+        }
+
+        private void Log(PitayaGoToCSConstants.LogLevel level, string message, params object[] args)
+        {
+            if (_logFunction == null)
+            {
+                return;
+            }
+
+            if (level < 0 || level < PitayaClient.DefaultLogLevel)
+            {
+                return;
+            }
+
+            StringBuilder logBuf = new StringBuilder();
+
+            DateTime currentTime = DateTime.Now;
+            logBuf.Append(currentTime.ToString("[yyyy-MM-dd HH:mm:ss] "));
+
+            string formattedMessage = string.Format(message, args);
+            logBuf.Append(formattedMessage);
+
+            _logFunction(level, logBuf.ToString());
+        }
+    }
+
 }
