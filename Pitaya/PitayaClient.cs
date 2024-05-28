@@ -184,7 +184,10 @@ namespace Pitaya
 
             do {
                 try {
-                    await _client.ConnectAsync(host, port).WaitAsync(TimeSpan.FromSeconds(_connTimeout));
+                    Task connTask = _client.ConnectAsync(host, port);
+                    if (await Task.WhenAny(connTask, Task.Delay(TimeSpan.FromSeconds(_connTimeout))) != connTask) {
+                        throw new TimeoutException("connection timeout");
+                    }
 
                     State = PitayaClientState.Connected;
                     _stream = _client.GetStream();
@@ -193,15 +196,15 @@ namespace Pitaya
                         SslStream sslStream = new SslStream(_stream, false, new RemoteCertificateValidationCallback(Utils.ValidateServerCertificate), null);
 
                         // ---------------------------------------
-                        // X509Certificate2 certificate = new X509Certificate2(<cert.crt-path>);
+                        X509Certificate2 certificate = new X509Certificate2(_certificateName);
                         // RSA rsaPrivateKey = LoadPrivateKeyFromPem(<key.pem-path>);
 
                         // certificate = certificate.CopyWithPrivateKey(rsaPrivateKey);
 
-                        // await sslStream.AuthenticateAsClientAsync(host, new  X509Certificate2Collection(certificate), System.Security.Authentication.SslProtocols.Tls12, false);
+                        await sslStream.AuthenticateAsClientAsync(host, new  X509Certificate2Collection(certificate), System.Security.Authentication.SslProtocols.Tls12, false);
                         // ---------------------------------------
 
-                        await sslStream.AuthenticateAsClientAsync(host);
+                        // await sslStream.AuthenticateAsClientAsync(host);
 
                         _stream = sslStream;
                     }
@@ -211,7 +214,7 @@ namespace Pitaya
                         return;
                     } catch (Exception e) {
                         Disconnect();
-                        if (_enableReconnect) {
+                        if (_enableReconnect && !_disposed) {
                             logger.Error(string.Format("error handling handshake: {0}, will reconn", e.ToString()));
                             _client = new TcpClient();
                             await Task.Delay(2000);
@@ -222,12 +225,12 @@ namespace Pitaya
                 }
                 catch (Exception e) {
                     Disconnect();
-                    if (_enableReconnect) {
-                        logger.Error(string.Format("error handling handshake: {0}, will reconn", e.ToString()));
+                    if (_enableReconnect && !_disposed) {
+                        logger.Error(string.Format("error connecting: {0}, will reconn", e.ToString()));
                         _client = new TcpClient();
                         await Task.Delay(2000);
                     }else {
-                        logger.Error(string.Format("error handling handshake: {0}", e.ToString()));
+                        logger.Error(string.Format("error connecting: {0}", e.ToString()));
                     }
                 }
             } while (_enableReconnect);
