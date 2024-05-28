@@ -10,6 +10,14 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Threading.Channels;
 
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
+using Org.BouncyCastle.OpenSsl;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Security;
+
 namespace Pitaya
 {
     public class PitayaClient : IDisposable, IPitayaClient, IPitayaListener
@@ -28,6 +36,8 @@ namespace Pitaya
         public PitayaClientState State { get; private set; } = PitayaClientState.Unknown;
         public int Quality { get; private set; }
         private static Stream _stream;
+        private object _readLock;
+        private object _writeLock;
         private SessionHandshakeData _clientHandshake;
         private Channel<Packet> _packetChan;
         private Dictionary<uint, PendingRequest> _pendingRequests;
@@ -57,6 +67,9 @@ namespace Pitaya
             SerializerFactory = serializerFactory;
             _eventManager = new EventManager();
             _client = new TcpClient();
+            
+            _readLock = new object();
+            _writeLock = new object();
 
             _clientHandshake = SessionHandshakeDataFactory.Default();
 
@@ -106,21 +119,6 @@ namespace Pitaya
             InternalConnect(host, port, opts);
         }
 
-    // if (_enableTls) {
-    //                         SslStream sslStream = new SslStream(
-    //                             _stream,
-    //                             false,
-    //                             new RemoteCertificateValidationCallback (Utils.ValidateServerCertificate),
-    //                             null
-    //                         );
-    //                         X509Certificate2 cert = new X509Certificate2(_certificateName);
-    //                         X509CertificateCollection certs = new X509CertificateCollection();
-    //                         certs.Add(cert);
-
-    //                         await sslStream.AuthenticateAsClientAsync(host, certs, true);
-    //                         _stream = sslStream;
-    //                     }
-
         async Task InternalConnect(string host, int port, string handshakeOpts)
         {
             State = PitayaClientState.Connecting;
@@ -136,25 +134,46 @@ namespace Pitaya
 
                     State = PitayaClientState.Connected;
                     _stream = _client.GetStream();
+
+                    if (_enableTls) {
+                        SslStream sslStream = new SslStream(_stream, false, new RemoteCertificateValidationCallback(Utils.ValidateServerCertificate), null);
+
+                        // ---------------------------------------
+                        // X509Certificate2 certificate = new X509Certificate2(<cert.crt-path>);
+                        // RSA rsaPrivateKey = LoadPrivateKeyFromPem(<key.pem-path>);
+
+                        // certificate = certificate.CopyWithPrivateKey(rsaPrivateKey);
+
+                        // await sslStream.AuthenticateAsClientAsync(host, new  X509Certificate2Collection(certificate), System.Security.Authentication.SslProtocols.Tls12, false);
+                        // ---------------------------------------
+
+                        await sslStream.AuthenticateAsClientAsync(host);
+
+                        _stream = sslStream;
+                    }
+
                     try {
-                        HandleHandshake();
+                        await HandleHandshake();
                         return;
                     } catch (Exception e) {
                         Disconnect();
                         if (_enableReconnect) {
-                            Console.WriteLine(string.Format("error handling handshake: {0}, will reconn", e.Message));
+                            Console.WriteLine(string.Format("error handling handshake: {0}, will reconn", e.ToString()));
+                            _client = new TcpClient();
+                            await Task.Delay(2000);
                         } else {
-                            Console.WriteLine(string.Format("error handling handshake: {0}", e.Message));
+                            Console.WriteLine(string.Format("error handling handshake: {0}", e.ToString()));
                         }
                     }
                 }
                 catch (Exception e) {
                     Disconnect();
                     if (_enableReconnect) {
-                        Console.WriteLine(string.Format("error connecting: {0}, will reconn", e.Message));
+                        Console.WriteLine(string.Format("error connecting: {0}, will reconn", e.ToString()));
+                        _client = new TcpClient();
                         await Task.Delay(2000);
                     }else {
-                        Console.WriteLine(string.Format("error connecting: {0}", e.Message));
+                        Console.WriteLine(string.Format("error connecting: {0}", e.ToString()));
                     }
                 }
             } while (_enableReconnect);
@@ -257,7 +276,9 @@ namespace Pitaya
                 }
             }
 
-            await _stream.WriteAsync(byteMsg, 0, byteMsg.Length);
+            lock (_writeLock) {
+                _stream.Write(byteMsg, 0, byteMsg.Length);
+            }
         }
 
         /// <summary>
@@ -345,6 +366,7 @@ namespace Pitaya
                 State = PitayaClientState.Disconnecting;
                 Connected = false;
                 _stream.Close();
+                _client.Close();
             }
         }
 
@@ -398,7 +420,9 @@ namespace Pitaya
             }
 
             byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.HandshakeAck, new byte[] { });
-            await _stream.WriteAsync(p);
+            lock (_writeLock) {
+                _stream.Write(p);
+            }
 
             Connected = true;
 
@@ -469,8 +493,8 @@ namespace Pitaya
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(string.Format("error handling server messages: {0}", e.Message));
-                        break;
+                        Console.WriteLine(string.Format("error handling server messages: {0}", e.ToString()));
+                        return;
                     }
 
                     foreach (Packet p in packets)
@@ -493,10 +517,12 @@ namespace Pitaya
             byte[] data = new byte[1024];
             int n = data.Length;
 
-            while (n == data.Length)
-            {
-                n = await _stream.ReadAsync(data);
-                buf.Write(data, 0, n);
+            lock (_readLock) {
+                while (n == data.Length)
+                {
+                    n = _stream.Read(data);
+                    buf.Write(data, 0, n);
+                }
             }
 
             Packet[] packets = {};
@@ -506,7 +532,7 @@ namespace Pitaya
             }
             catch (Exception e)
             {
-                Console.WriteLine(string.Format("error decoding packet from server: {0}", e.Message));
+                Console.WriteLine(string.Format("error decoding packet from server: {0}", e.ToString()));
             }
             // is this Necessarily?
             int totalProcessed = 0;
@@ -567,18 +593,22 @@ namespace Pitaya
 
                     int sentAt = (int)DateTime.Now.TimeOfDay.TotalSeconds;
 
-                    try
-                    {
-                        await _stream.WriteAsync(p);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(string.Format("error sending heartbeat to server: {0}", e.Message));
-                        return;
+                    lock (_writeLock) {
+                        try
+                        {
+                            _stream.Write(p);
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(string.Format("error sending heartbeat to server: {0}", e.ToString()));
+                            return;
+                        }
                     }
 
-                    byte[] data = new byte[1024];
-                    await _stream.ReadAsync(data);
+                    lock (_readLock) {
+                        byte[] data = new byte[1024];
+                        _stream.Read(data);
+                    }
                     int receivedAt = (int)DateTime.Now.TimeOfDay.TotalSeconds;
 
                     Quality = sentAt - receivedAt;
@@ -594,11 +624,26 @@ namespace Pitaya
 
         async Task SendHandshakeRequest()
         {
-            IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
-            byte[] encBytes = serializer.Encode(_clientHandshake);
-            byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Handshake, encBytes);
+            lock (_writeLock) {
+                IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
+                byte[] encBytes = serializer.Encode(_clientHandshake);
+                byte[] p = EncoderDecoder.EncodePacket(PitayaGoToCSConstants.Handshake, encBytes);
 
-            await _stream.WriteAsync(p, 0, p.Length);
+                _stream.Write(p, 0, p.Length);
+            }
+        }
+
+        RSA LoadPrivateKeyFromPem(string pemPath)
+        {
+            using (var reader = File.OpenText(pemPath))
+            {
+                PemReader pemReader = new PemReader(reader);
+                var keyPair = (AsymmetricCipherKeyPair)pemReader.ReadObject();
+                var rsaParams = DotNetUtilities.ToRSAParameters((RsaPrivateCrtKeyParameters)keyPair.Private);
+                RSA rsa = RSA.Create();
+                rsa.ImportParameters(rsaParams);
+                return rsa;
+            }
         }
 
         //---------------Pitaya Listener------------------------//

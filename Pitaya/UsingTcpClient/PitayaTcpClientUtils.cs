@@ -1,6 +1,10 @@
 using System;
 using System.IO;
 using System.Runtime.Serialization;
+using System.Collections.Generic;
+
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
 
 namespace Pitaya.NativeImpl
 {
@@ -81,7 +85,15 @@ namespace Pitaya.NativeImpl
                     RoutesCodesManager.codes[code] = r;
                 }
             }
+        }
+        
+        public static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            // if (sslPolicyErrors == SslPolicyErrors.None)
+                return true;
 
+            // Console.WriteLine("Certificate error: {0}", sslPolicyErrors);
+            // return false;
         }
     }
 }
