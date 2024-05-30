@@ -55,7 +55,7 @@ namespace Pitaya.NativeImpl
     {
         public Dictionary<string, ushort> Dict;
         public int Heartbeat;
-        public string Serializer;
+        public ProtobufSerializer.SerializationFormat Serializer;
     }
 
     public class HandshakeData

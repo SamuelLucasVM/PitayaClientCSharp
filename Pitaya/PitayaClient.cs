@@ -54,6 +54,7 @@ namespace Pitaya
         private bool _enableTls;
         private string _certificateName;
         private bool _enableReconnect;
+        private ProtobufSerializer.SerializationFormat _clientSerializer;
 
         public PitayaClient() : this(false) { }
         public PitayaClient(int connectionTimeout) : this(false, null, connectionTimeout: connectionTimeout) { }
@@ -241,7 +242,7 @@ namespace Pitaya
         public void Request<TResponse>(string route, object msg, Action<TResponse> action, Action<PitayaError> errorAction, int timeout = -1)
         {
             IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
-            if (msg is IMessage) serializer = SerializerFactory.CreateProtobufSerializer(ProtobufSerializer.SerializationFormat.Protobuf);
+            if (msg is IMessage) serializer = SerializerFactory.CreateProtobufSerializer(_clientSerializer);
             RequestInternal(route, msg, timeout, serializer, action, errorAction);
         }
 
@@ -282,7 +283,7 @@ namespace Pitaya
         /// </summary>
         public void Request<T>(string route, IMessage msg, int timeout, Action<T> action, Action<PitayaError> errorAction)
         {
-            ProtobufSerializer.SerializationFormat format = ProtobufSerializer.SerializationFormat.Protobuf;
+            ProtobufSerializer.SerializationFormat format = _clientSerializer;
             RequestInternal(route, msg, timeout, SerializerFactory.CreateProtobufSerializer(format), action, errorAction);
         }
 
@@ -351,7 +352,7 @@ namespace Pitaya
         public void Notify(string route, object msg, int timeout = -1)
         {
             IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
-            if (msg is IMessage) serializer = SerializerFactory.CreateProtobufSerializer(ProtobufSerializer.SerializationFormat.Protobuf);
+            if (msg is IMessage) serializer = SerializerFactory.CreateProtobufSerializer(_clientSerializer);
             NotifyInternal(route, msg, serializer, timeout);
         }
 
@@ -360,7 +361,7 @@ namespace Pitaya
         /// </summary>
         public void Notify(string route, int timeout, IMessage msg)
         {
-            ProtobufSerializer.SerializationFormat format = ProtobufSerializer.SerializationFormat.Protobuf;
+            ProtobufSerializer.SerializationFormat format = _clientSerializer;
             NotifyInternal(route, msg, SerializerFactory.CreateProtobufSerializer(format), timeout);
         }
 
@@ -399,7 +400,7 @@ namespace Pitaya
         public void OnRoute<T>(string route, Action<T> action)
         {
             IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
-            if (typeof(IMessage).IsAssignableFrom(typeof(T))) serializer = SerializerFactory.CreateProtobufSerializer(ProtobufSerializer.SerializationFormat.Protobuf);
+            if (typeof(IMessage).IsAssignableFrom(typeof(T))) serializer = SerializerFactory.CreateProtobufSerializer(_clientSerializer);
 
             OnRouteInternal(route, action, serializer);
         }
@@ -459,10 +460,12 @@ namespace Pitaya
                 handshakePacket.Data = Compression.InflateData(handshakePacket.Data);
             }
 
+            logger.Debug("got handshake from sv, data: {0}", System.Text.Encoding.UTF8.GetString(handshakePacket.Data));
+
             IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
             handshake = serializer.Decode<HandshakeData>(handshakePacket.Data);
 
-            logger.Debug("got handshake from sv, data: " + handshake);
+            _clientSerializer = handshake.Sys.Serializer;
 
             if (handshake.Sys.Dict != null)
             {

@@ -8,10 +8,11 @@ namespace Pitaya
     {
         public enum SerializationFormat
         {        
+            [JsonProperty("json")]
             Json,
+            [JsonProperty("protobuf")]
             Protobuf
         }
-
         SerializationFormat format;
 
         public ProtobufSerializer(SerializationFormat format)
