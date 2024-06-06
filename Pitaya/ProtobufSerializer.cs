@@ -1,6 +1,7 @@
 using System;
 using System.Text;
 using Google.Protobuf;
+using Newtonsoft.Json;
 
 namespace Pitaya
 {
