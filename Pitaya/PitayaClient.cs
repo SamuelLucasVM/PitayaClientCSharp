@@ -460,8 +460,6 @@ namespace Pitaya
                 handshakePacket.Data = Compression.InflateData(handshakePacket.Data);
             }
 
-            logger.Debug("got handshake from sv, data: {0}", System.Text.Encoding.UTF8.GetString(handshakePacket.Data));
-
             IPitayaSerializer serializer = SerializerFactory.CreateJsonSerializer();
             handshake = serializer.Decode<HandshakeData>(handshakePacket.Data);
 
