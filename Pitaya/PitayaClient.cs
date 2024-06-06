@@ -13,10 +13,6 @@ using System.Threading.Channels;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
-using Org.BouncyCastle.OpenSsl;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Security;
 
 #if UNITY_EDITOR
 using UnityEngine;
@@ -196,16 +192,9 @@ namespace Pitaya
                     if (_enableTls) {
                         SslStream sslStream = new SslStream(_stream, false, new RemoteCertificateValidationCallback(Utils.ValidateServerCertificate), null);
 
-                        // ---------------------------------------
                         X509Certificate2 certificate = new X509Certificate2(_certificateName);
-                        // RSA rsaPrivateKey = LoadPrivateKeyFromPem(<key.pem-path>);
-
-                        // certificate = certificate.CopyWithPrivateKey(rsaPrivateKey);
 
                         await sslStream.AuthenticateAsClientAsync(host, new  X509Certificate2Collection(certificate), System.Security.Authentication.SslProtocols.Tls12, false);
-                        // ---------------------------------------
-
-                        // await sslStream.AuthenticateAsClientAsync(host);
 
                         _stream = sslStream;
                     }
@@ -684,18 +673,6 @@ namespace Pitaya
             }
         }
 
-        RSA LoadPrivateKeyFromPem(string pemPath)
-        {
-            using (var reader = File.OpenText(pemPath))
-            {
-                PemReader pemReader = new PemReader(reader);
-                var keyPair = (AsymmetricCipherKeyPair)pemReader.ReadObject();
-                var rsaParams = DotNetUtilities.ToRSAParameters((RsaPrivateCrtKeyParameters)keyPair.Private);
-                RSA rsa = RSA.Create();
-                rsa.ImportParameters(rsaParams);
-                return rsa;
-            }
-        }
 
         //---------------Pitaya Listener------------------------//
 
